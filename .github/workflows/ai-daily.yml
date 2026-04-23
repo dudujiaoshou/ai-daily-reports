@@ -29,23 +29,21 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Generate AI Report
-        id: generate
-        env:
-          NVIDIA_API_KEY: ${{ env.NVIDIA_API_KEY }}
+      - name: Download generate script
         run: |
-          python3 << 'EOF'
-          import os
-          import requests
-          from datetime import datetime
+          cat > generate_report.py << 'ENDOFFILE'
+#!/usr/bin/env python3
+import os
+import requests
+from datetime import datetime
 
-          now = datetime.now()
-          date_str = now.strftime('%Y-%m-%d')
-          is_pm = now.hour >= 12
-          file_suffix = "_PM" if is_pm else "_AM"
-          filename = "AI鏃ユ姤_" + date_str + file_suffix + ".md"
+now = datetime.now()
+date_str = now.strftime('%Y-%m-%d')
+is_pm = now.hour >= 12
+file_suffix = "_PM" if is_pm else "_AM"
+filename = "AI鏃ユ姤_" + date_str + file_suffix + ".md"
 
-          system_prompt = """浣犳槸涓€涓笓涓氱殑AI琛屼笟鍒嗘瀽甯堛€傝鏍规嵁鏈€鏂颁俊鎭紝鐢熸垚涓€浠藉畬鏁寸殑AI琛屼笟鏃ユ姤銆?
+system_prompt = """浣犳槸涓€涓笓涓氱殑AI琛屼笟鍒嗘瀽甯堛€傝鏍规嵁鏈€鏂颁俊鎭紝鐢熸垚涓€浠藉畬鏁寸殑AI琛屼笟鏃ユ姤銆?
 
 鎶ュ憡蹇呴』鍖呭惈浠ヤ笅涓夐儴鍒嗭紝涓ユ牸鎸夋牸寮忚緭鍑篗arkdown锛?
 
@@ -70,44 +68,49 @@ jobs:
 - 缁撳熬鏍囨敞"鐢?AI 鑷姩鐢熸垚"
 """
 
-          user_prompt = "璇风敓鎴? + date_str + "鐨凙I琛屼笟鏃ユ姤锛岄噸鐐瑰叧娉ㄤ粖澶╁拰杩戞湡鐨勬渶鏂板姩鎬併€?
+user_prompt = "璇风敓鎴? + date_str + "鐨凙I琛屼笟鏃ユ姤锛岄噸鐐瑰叧娉ㄤ粖澶╁拰杩戞湡鐨勬渶鏂板姩鎬併€?
 
-          api_key = os.environ.get('NVIDIA_API_KEY')
-          
-          if api_key:
-              url = "https://integrate.api.nvidia.com/v1/chat/completions"
-              headers = {
-                  "Authorization": "Bearer " + api_key,
-                  "Content-Type": "application/json"
-              }
-              payload = {
-                  "model": "nvidia/llama-3.1-nemotron-70b-instruct",
-                  "messages": [
-                      {"role": "system", "content": system_prompt},
-                      {"role": "user", "content": user_prompt}
-                  ],
-                  "max_tokens": 4000,
-                  "temperature": 0.7
-              }
-              
-              response = requests.post(url, headers=headers, json=payload)
-              if response.status_code == 200:
-                  result = response.json()
-                  content = result['choices'][0]['message']['content']
-              else:
-                  content = "# AI Daily Report " + date_str + file_suffix + "\n\n[API Error: " + str(response.status_code) + "]\n"
-          else:
-              content = "# AI Daily Report " + date_str + file_suffix + "\n\n[Please set NVIDIA_API_KEY in GitHub Secrets]\n"
-          
-          with open(filename, 'w', encoding='utf-8') as f:
-              f.write(content)
-          
-          print("Report generated: " + filename)
-          
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write("filename=" + filename + "\n")
-          
-          EOF
+api_key = os.environ.get('NVIDIA_API_KEY')
+
+if api_key:
+    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    headers = {
+        "Authorization": "Bearer " + api_key,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "max_tokens": 4000,
+        "temperature": 0.7
+    }
+    
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code == 200:
+        result = response.json()
+        content = result['choices'][0]['message']['content']
+    else:
+        content = "# AI Daily Report " + date_str + file_suffix + "\n\n[API Error: " + str(response.status_code) + "]\n"
+else:
+    content = "# AI Daily Report " + date_str + file_suffix + "\n\n[Please set NVIDIA_API_KEY in GitHub Secrets]\n"
+
+with open(filename, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("Report generated: " + filename)
+
+with open(os.environ.get('GITHUB_OUTPUT', '/tmp/github_output'), 'a') as f:
+    f.write("filename=" + filename + "\n")
+ENDOFFILE
+
+      - name: Run generate script
+        env:
+          NVIDIA_API_KEY: ${{ env.NVIDIA_API_KEY }}
+          GITHUB_OUTPUT: ${{ env.GITHUB_OUTPUT }}
+        run: python3 generate_report.py
 
       - name: Commit and push report
         run: |
@@ -122,34 +125,39 @@ jobs:
         env:
           SERVERCHAN_SCKEY: ${{ env.SERVERCHAN_SCKEY }}
         run: |
-          python3 << 'EOF'
-          import os
-          import requests
-          from datetime import datetime
+          python3 << 'PYEOF'
+import os
+import requests
+from datetime import datetime
+import glob
 
-          sckey = os.environ.get('SERVERCHAN_SCKEY')
-          now = datetime.now()
-          is_pm = now.hour >= 12
-          report_type = "Evening" if is_pm else "Morning"
-          
-          with open("AI鏃ユ姤_*.md", 'r', encoding='utf-8') as f:
-              content = f.read()
-          
-          summary = content[:500] + "..." if len(content) > 500 else content
-          
-          url = "https://sc.ftqq.com/" + sckey + ".send"
-          data = {
-              "text": "AI Daily Report " + report_type + " | " + now.strftime('%m/%d %H:%M'),
-              "desp": "**GitHub**: https://github.com/dudujiaoshou/ai-daily-reports\n\n---\n" + summary
-          }
-          
-          try:
-              resp = requests.post(url, data=data)
-              print("Notification sent: " + resp.text)
-          except Exception as e:
-              print("Notification failed: " + str(e))
-          
-          EOF
+sckey = os.environ.get('SERVERCHAN_SCKEY')
+now = datetime.now()
+is_pm = now.hour >= 12
+report_type = "Evening" if is_pm else "Morning"
+
+files = sorted(glob.glob("AI鏃ユ姤_*.md"))
+if files:
+    latest = files[-1]
+    with open(latest, 'r', encoding='utf-8') as f:
+        content = f.read()
+else:
+    content = "[No report generated]"
+
+summary = content[:500] + "..." if len(content) > 500 else content
+
+url = "https://sc.ftqq.com/" + sckey + ".send"
+data = {
+    "text": "AI Daily Report " + report_type + " | " + now.strftime('%m/%d %H:%M'),
+    "desp": "**GitHub**: https://github.com/dudujiaoshou/ai-daily-reports\n\n---\n" + summary
+}
+
+try:
+    resp = requests.post(url, data=data)
+    print("Notification sent: " + resp.text)
+except Exception as e:
+    print("Notification failed: " + str(e))
+PYEOF
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
