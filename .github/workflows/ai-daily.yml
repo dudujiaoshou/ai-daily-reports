@@ -5,6 +5,11 @@ on:
     - cron: '0 2 * * *'
     - cron: '0 10 * * *'
   workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode (skip API call)'
+        required: false
+        default: 'false'
 
 env:
   SERVERCHAN_SCKEY: ${{ secrets.SERVERCHAN_SCKEY }}
@@ -41,34 +46,34 @@ jobs:
           date_str = now.strftime('%Y-%m-%d')
           is_pm = now.hour >= 12
           file_suffix = "_PM" if is_pm else "_AM"
-          filename = "AI日报_" + date_str + file_suffix + ".md"
+          filename = "AI鏃ユ姤_" + date_str + file_suffix + ".md"
 
-          system_prompt = """你是一个专业的AI行业分析师。请根据最新信息，生成一份完整的AI行业日报。
+          system_prompt = """浣犳槸涓€涓笓涓氱殑AI琛屼笟鍒嗘瀽甯堛€傝鏍规嵁鏈€鏂颁俊鎭紝鐢熸垚涓€浠藉畬鏁寸殑AI琛屼笟鏃ユ姤銆?
 
-报告必须包含以下三部分，严格按格式输出Markdown：
+鎶ュ憡蹇呴』鍖呭惈浠ヤ笅涓夐儴鍒嗭紝涓ユ牸鎸夋牸寮忚緭鍑篗arkdown锛?
 
-## 一、全球AI/科技/投资最新新闻
-搜索并整理今天最新的全球AI、科技、投资领域动态，包括重要模型发布、融资事件、产品更新、政策动向等，整理为5-10条要点，重要数据加粗。
+## 涓€銆佸叏鐞傾I/绉戞妧/鎶曡祫鏈€鏂版柊闂?
+鎼滅储骞舵暣鐞嗕粖澶╂渶鏂扮殑鍏ㄧ悆AI銆佺鎶€銆佹姇璧勯鍩熷姩鎬侊紝鍖呮嫭閲嶈妯″瀷鍙戝竷銆佽瀺璧勪簨浠躲€佷骇鍝佹洿鏂般€佹斂绛栧姩鍚戠瓑锛屾暣鐞嗕负5-10鏉¤鐐癸紝閲嶈鏁版嵁鍔犵矖銆?
 
-## 二、中国AI创业公司数据分析
-搜索国内AI创业公司最新动态，聚焦以下维度：
-- 融资/投资动作（金额、轮次、投资方）
-- 细分赛道（具身智能/AI Agent/AI医疗/AI芯片等）
-- 有发展潜力的新兴公司
-输出结构化分析（表格+要点），至少覆盖5家公司。
+## 浜屻€佷腑鍥紸I鍒涗笟鍏徃鏁版嵁鍒嗘瀽
+鎼滅储鍥藉唴AI鍒涗笟鍏徃鏈€鏂板姩鎬侊紝鑱氱劍浠ヤ笅缁村害锛?
+- 铻嶈祫/鎶曡祫鍔ㄤ綔锛堥噾棰濄€佽疆娆°€佹姇璧勬柟锛?
+- 缁嗗垎璧涢亾锛堝叿韬櫤鑳?AI Agent/AI鍖荤枟/AI鑺墖绛夛級
+- 鏈夊彂灞曟綔鍔涚殑鏂板叴鍏徃
+杈撳嚭缁撴瀯鍖栧垎鏋愶紙琛ㄦ牸+瑕佺偣锛夛紝鑷冲皯瑕嗙洊5瀹跺叕鍙搞€?
 
-## 三、上海AI相关活动整理
-搜索公众号、小红书、今日头条、Luma等平台上近期在上海举办的AI相关活动（线下沙龙、论坛、Meetup、Demo Day等），整理为表格，包含：活动名称、时间、地点、报名渠道/链接。重点关注近7天内可报名的活动。
+## 涓夈€佷笂娴稟I鐩稿叧娲诲姩鏁寸悊
+鎼滅储鍏紬鍙枫€佸皬绾功銆佷粖鏃ュご鏉°€丩uma绛夊钩鍙颁笂杩戞湡鍦ㄤ笂娴蜂妇鍔炵殑AI鐩稿叧娲诲姩锛堢嚎涓嬫矙榫欍€佽鍧涖€丮eetup銆丏emo Day绛夛級锛屾暣鐞嗕负琛ㄦ牸锛屽寘鍚細娲诲姩鍚嶇О銆佹椂闂淬€佸湴鐐广€佹姤鍚嶆笭閬?閾炬帴銆傞噸鐐瑰叧娉ㄨ繎7澶╁唴鍙姤鍚嶇殑娲诲姩銆?
 
-格式要求：
-- 使用中文
-- 重要数据用**加粗**
-- 每部分有小标题和要点
-- 报告开头写明日期和类型（早报/晚报）
-- 结尾标注"由 AI 自动生成"
+鏍煎紡瑕佹眰锛?
+- 浣跨敤涓枃
+- 閲嶈鏁版嵁鐢?*鍔犵矖**
+- 姣忛儴鍒嗘湁灏忔爣棰樺拰瑕佺偣
+- 鎶ュ憡寮€澶村啓鏄庢棩鏈熷拰绫诲瀷锛堟棭鎶?鏅氭姤锛?
+- 缁撳熬鏍囨敞"鐢?AI 鑷姩鐢熸垚"
 """
 
-          user_prompt = "请生成" + date_str + "的AI行业日报，重点关注今天和近期的最新动态。"
+          user_prompt = "璇风敓鎴? + date_str + "鐨凙I琛屼笟鏃ユ姤锛岄噸鐐瑰叧娉ㄤ粖澶╁拰杩戞湡鐨勬渶鏂板姩鎬併€?
 
           api_key = os.environ.get('NVIDIA_API_KEY')
           
@@ -115,7 +120,7 @@ jobs:
           git diff --staged --quiet || git commit -m "docs: $(date +'%Y-%m-%d %H:%M') auto update"
           git push
 
-      - name: Send WeChat notification via Server酱
+      - name: Send WeChat notification via Server閰?
         if: env.SERVERCHAN_SCKEY != ''
         run: |
           python << 'PYEOF'
@@ -151,5 +156,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ai-daily-report-${{ env.GITHUB_RUN_NUMBER }}
-          path: AI日报_*.md
+          path: AI鏃ユ姤_*.md
           retention-days: 30
