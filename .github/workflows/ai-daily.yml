@@ -5,11 +5,6 @@ on:
     - cron: '0 2 * * *'
     - cron: '0 10 * * *'
   workflow_dispatch:
-    inputs:
-      test_mode:
-        description: 'Test mode (skip API call)'
-        required: false
-        default: 'false'
 
 env:
   SERVERCHAN_SCKEY: ${{ secrets.SERVERCHAN_SCKEY }}
@@ -36,8 +31,10 @@ jobs:
 
       - name: Generate AI Report
         id: generate
+        env:
+          NVIDIA_API_KEY: ${{ env.NVIDIA_API_KEY }}
         run: |
-          python << 'PYEOF'
+          python3 << 'EOF'
           import os
           import requests
           from datetime import datetime
@@ -110,7 +107,7 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write("filename=" + filename + "\n")
           
-          PYEOF
+          EOF
 
       - name: Commit and push report
         run: |
@@ -122,8 +119,10 @@ jobs:
 
       - name: Send WeChat notification via Server閰?
         if: env.SERVERCHAN_SCKEY != ''
+        env:
+          SERVERCHAN_SCKEY: ${{ env.SERVERCHAN_SCKEY }}
         run: |
-          python << 'PYEOF'
+          python3 << 'EOF'
           import os
           import requests
           from datetime import datetime
@@ -133,7 +132,7 @@ jobs:
           is_pm = now.hour >= 12
           report_type = "Evening" if is_pm else "Morning"
           
-          with open("${{ steps.generate.outputs.filename }}", 'r', encoding='utf-8') as f:
+          with open("AI鏃ユ姤_*.md", 'r', encoding='utf-8') as f:
               content = f.read()
           
           summary = content[:500] + "..." if len(content) > 500 else content
@@ -150,7 +149,7 @@ jobs:
           except Exception as e:
               print("Notification failed: " + str(e))
           
-          PYEOF
+          EOF
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
