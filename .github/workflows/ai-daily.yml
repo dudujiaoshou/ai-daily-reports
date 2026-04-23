@@ -2,15 +2,13 @@ name: AI Daily Report
 
 on:
   schedule:
-    # 早报: 每天 10:00 北京时间 = UTC 02:00
     - cron: '0 2 * * *'
-    # 晚报: 每天 18:00 北京时间 = UTC 10:00
     - cron: '0 10 * * *'
-  workflow_dispatch:  # 支持手动触发测试
+  workflow_dispatch:
 
 env:
   SERVERCHAN_SCKEY: ${{ secrets.SERVERCHAN_SCKEY }}
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
@@ -29,32 +27,24 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install openai requests
+        run: pip install requests
 
       - name: Generate AI Report
         id: generate
         run: |
-          python << 'PYTHON_SCRIPT'
+          python << 'PYEOF'
           import os
           import requests
           from datetime import datetime
 
-          # 获取当前时间
           now = datetime.now()
           date_str = now.strftime('%Y-%m-%d')
-          
-          # 判断是早报还是晚报
           is_pm = now.hour >= 12
-          report_type = "晚报" if is_pm else "早报"
           file_suffix = "_PM" if is_pm else "_AM"
-          
-          # 构建文件名
-          filename = f"AI日报_{date_str}{file_suffix}.md"
-          
-          # 系统提示词
+          filename = "AI日报_" + date_str + file_suffix + ".md"
+
           system_prompt = """你是一个专业的AI行业分析师。请根据最新信息，生成一份完整的AI行业日报。
-          
+
 报告必须包含以下三部分，严格按格式输出Markdown：
 
 ## 一、全球AI/科技/投资最新新闻
@@ -78,95 +68,84 @@ jobs:
 - 结尾标注"由 AI 自动生成"
 """
 
-          user_prompt = f"请生成{date_str}的AI行业{report_type}，重点关注今天和近期的最新动态。"
+          user_prompt = "请生成" + date_str + "的AI行业日报，重点关注今天和近期的最新动态。"
 
-          # 调用 AI API（优先使用 OpenAI API）
-          api_key = os.environ.get('OPENAI_API_KEY')
+          api_key = os.environ.get('NVIDIA_API_KEY')
           
           if api_key:
-              # 使用 OpenAI API
-              import openai
-              client = openai.OpenAI(api_key=api_key)
-              response = client.chat.completions.create(
-                  model="gpt-4o-mini",
-                  messages=[
+              url = "https://integrate.api.nvidia.com/v1/chat/completions"
+              headers = {
+                  "Authorization": "Bearer " + api_key,
+                  "Content-Type": "application/json"
+              }
+              payload = {
+                  "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+                  "messages": [
                       {"role": "system", "content": system_prompt},
                       {"role": "user", "content": user_prompt}
                   ],
-                  max_tokens=4000,
-                  temperature=0.7
-              )
-              content = response.choices[0].message.content
+                  "max_tokens": 4000,
+                  "temperature": 0.7
+              }
+              
+              response = requests.post(url, headers=headers, json=payload)
+              if response.status_code == 200:
+                  result = response.json()
+                  content = result['choices'][0]['message']['content']
+              else:
+                  content = "# AI Daily Report " + date_str + file_suffix + "\n\n[API Error: " + str(response.status_code) + "]\n"
           else:
-              # 如果没有 API Key，使用占位内容（实际部署时需要配置 API Key）
-              content = f"""# AI日报_{date_str}{file_suffix}
-
-> ⚠️ **配置提示**: 请在 GitHub Secrets 中配置 `OPENAI_API_KEY` 以启用 AI 内容生成功能。
-
-本报告由 GitHub Actions 自动调度。
-
----
-*由 AI 自动生成于 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-"""
+              content = "# AI Daily Report " + date_str + file_suffix + "\n\n[Please set NVIDIA_API_KEY in GitHub Secrets]\n"
           
-          # 保存报告
           with open(filename, 'w', encoding='utf-8') as f:
               f.write(content)
           
-          print(f"报告已生成: {filename}")
+          print("Report generated: " + filename)
           
-          # 设置输出，供后续步骤使用
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"filename={filename}\n")
-              f.write(f"content={content[:200]}...\n")
+              f.write("filename=" + filename + "\n")
           
-          PYTHON_SCRIPT
+          PYEOF
 
       - name: Commit and push report
         run: |
           git config --local user.name "GitHub Actions Bot"
           git config --local user.email "actions@github.com"
           git add .
-          git diff --staged --quiet || git commit -m "docs: $(date +'%Y-%m-%d %H:%M') 自动更新日报"
+          git diff --staged --quiet || git commit -m "docs: $(date +'%Y-%m-%d %H:%M') auto update"
           git push
 
       - name: Send WeChat notification via Server酱
         if: env.SERVERCHAN_SCKEY != ''
         run: |
-          python << 'PYTHON_SCRIPT'
+          python << 'PYEOF'
           import os
           import requests
           from datetime import datetime
 
           sckey = os.environ.get('SERVERCHAN_SCKEY')
-          filename = "${{ steps.generate.outputs.filename }}"
-          report_type = "晚报" if "${{ env.SERVERCHAN_SCKEY }}" else "早报"
-          
           now = datetime.now()
           is_pm = now.hour >= 12
-          report_type = "晚报 ☀️" if is_pm else "早报 🌅"
+          report_type = "Evening" if is_pm else "Morning"
           
-          # 读取生成的报告内容
           with open("${{ steps.generate.outputs.filename }}", 'r', encoding='utf-8') as f:
               content = f.read()
           
-          # 提取摘要（前500字）
           summary = content[:500] + "..." if len(content) > 500 else content
           
-          # 发送通知
-          url = f"https://sc.ftqq.com/{sckey}.send"
+          url = "https://sc.ftqq.com/" + sckey + ".send"
           data = {
-              "text": f"📰 AI行业{report_type}已生成 | {now.strftime('%m/%d %H:%M')}",
-              "desp": f"**GitHub 仓库**: https://github.com/dudujiaoshou/ai-daily-reports\n\n---\n{summary}"
+              "text": "AI Daily Report " + report_type + " | " + now.strftime('%m/%d %H:%M'),
+              "desp": "**GitHub**: https://github.com/dudujiaoshou/ai-daily-reports\n\n---\n" + summary
           }
           
           try:
               resp = requests.post(url, data=data)
-              print(f"通知发送状态: {resp.text}")
+              print("Notification sent: " + resp.text)
           except Exception as e:
-              print(f"通知发送失败: {e}")
+              print("Notification failed: " + str(e))
           
-          PYTHON_SCRIPT
+          PYEOF
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
