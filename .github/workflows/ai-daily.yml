@@ -1,0 +1,176 @@
+name: AI Daily Report
+
+on:
+  schedule:
+    # 早报: 每天 10:00 北京时间 = UTC 02:00
+    - cron: '0 2 * * *'
+    # 晚报: 每天 18:00 北京时间 = UTC 10:00
+    - cron: '0 10 * * *'
+  workflow_dispatch:  # 支持手动触发测试
+
+env:
+  SERVERCHAN_SCKEY: ${{ secrets.SERVERCHAN_SCKEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install openai requests
+
+      - name: Generate AI Report
+        id: generate
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import os
+          import requests
+          from datetime import datetime
+
+          # 获取当前时间
+          now = datetime.now()
+          date_str = now.strftime('%Y-%m-%d')
+          
+          # 判断是早报还是晚报
+          is_pm = now.hour >= 12
+          report_type = "晚报" if is_pm else "早报"
+          file_suffix = "_PM" if is_pm else "_AM"
+          
+          # 构建文件名
+          filename = f"AI日报_{date_str}{file_suffix}.md"
+          
+          # 系统提示词
+          system_prompt = """你是一个专业的AI行业分析师。请根据最新信息，生成一份完整的AI行业日报。
+          
+报告必须包含以下三部分，严格按格式输出Markdown：
+
+## 一、全球AI/科技/投资最新新闻
+搜索并整理今天最新的全球AI、科技、投资领域动态，包括重要模型发布、融资事件、产品更新、政策动向等，整理为5-10条要点，重要数据加粗。
+
+## 二、中国AI创业公司数据分析
+搜索国内AI创业公司最新动态，聚焦以下维度：
+- 融资/投资动作（金额、轮次、投资方）
+- 细分赛道（具身智能/AI Agent/AI医疗/AI芯片等）
+- 有发展潜力的新兴公司
+输出结构化分析（表格+要点），至少覆盖5家公司。
+
+## 三、上海AI相关活动整理
+搜索公众号、小红书、今日头条、Luma等平台上近期在上海举办的AI相关活动（线下沙龙、论坛、Meetup、Demo Day等），整理为表格，包含：活动名称、时间、地点、报名渠道/链接。重点关注近7天内可报名的活动。
+
+格式要求：
+- 使用中文
+- 重要数据用**加粗**
+- 每部分有小标题和要点
+- 报告开头写明日期和类型（早报/晚报）
+- 结尾标注"由 AI 自动生成"
+"""
+
+          user_prompt = f"请生成{date_str}的AI行业{report_type}，重点关注今天和近期的最新动态。"
+
+          # 调用 AI API（优先使用 OpenAI API）
+          api_key = os.environ.get('OPENAI_API_KEY')
+          
+          if api_key:
+              # 使用 OpenAI API
+              import openai
+              client = openai.OpenAI(api_key=api_key)
+              response = client.chat.completions.create(
+                  model="gpt-4o-mini",
+                  messages=[
+                      {"role": "system", "content": system_prompt},
+                      {"role": "user", "content": user_prompt}
+                  ],
+                  max_tokens=4000,
+                  temperature=0.7
+              )
+              content = response.choices[0].message.content
+          else:
+              # 如果没有 API Key，使用占位内容（实际部署时需要配置 API Key）
+              content = f"""# AI日报_{date_str}{file_suffix}
+
+> ⚠️ **配置提示**: 请在 GitHub Secrets 中配置 `OPENAI_API_KEY` 以启用 AI 内容生成功能。
+
+本报告由 GitHub Actions 自动调度。
+
+---
+*由 AI 自动生成于 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+"""
+          
+          # 保存报告
+          with open(filename, 'w', encoding='utf-8') as f:
+              f.write(content)
+          
+          print(f"报告已生成: {filename}")
+          
+          # 设置输出，供后续步骤使用
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"filename={filename}\n")
+              f.write(f"content={content[:200]}...\n")
+          
+          PYTHON_SCRIPT
+
+      - name: Commit and push report
+        run: |
+          git config --local user.name "GitHub Actions Bot"
+          git config --local user.email "actions@github.com"
+          git add .
+          git diff --staged --quiet || git commit -m "docs: $(date +'%Y-%m-%d %H:%M') 自动更新日报"
+          git push
+
+      - name: Send WeChat notification via Server酱
+        if: env.SERVERCHAN_SCKEY != ''
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import os
+          import requests
+          from datetime import datetime
+
+          sckey = os.environ.get('SERVERCHAN_SCKEY')
+          filename = "${{ steps.generate.outputs.filename }}"
+          report_type = "晚报" if "${{ env.SERVERCHAN_SCKEY }}" else "早报"
+          
+          now = datetime.now()
+          is_pm = now.hour >= 12
+          report_type = "晚报 ☀️" if is_pm else "早报 🌅"
+          
+          # 读取生成的报告内容
+          with open("${{ steps.generate.outputs.filename }}", 'r', encoding='utf-8') as f:
+              content = f.read()
+          
+          # 提取摘要（前500字）
+          summary = content[:500] + "..." if len(content) > 500 else content
+          
+          # 发送通知
+          url = f"https://sc.ftqq.com/{sckey}.send"
+          data = {
+              "text": f"📰 AI行业{report_type}已生成 | {now.strftime('%m/%d %H:%M')}",
+              "desp": f"**GitHub 仓库**: https://github.com/dudujiaoshou/ai-daily-reports\n\n---\n{summary}"
+          }
+          
+          try:
+              resp = requests.post(url, data=data)
+              print(f"通知发送状态: {resp.text}")
+          except Exception as e:
+              print(f"通知发送失败: {e}")
+          
+          PYTHON_SCRIPT
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-daily-report-${{ env.GITHUB_RUN_NUMBER }}
+          path: AI日报_*.md
+          retention-days: 30
