@@ -29,88 +29,11 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Download generate script
-        run: |
-          cat > generate_report.py << 'ENDOFFILE'
-#!/usr/bin/env python3
-import os
-import requests
-from datetime import datetime
-
-now = datetime.now()
-date_str = now.strftime('%Y-%m-%d')
-is_pm = now.hour >= 12
-file_suffix = "_PM" if is_pm else "_AM"
-filename = "AI鏃ユ姤_" + date_str + file_suffix + ".md"
-
-system_prompt = """浣犳槸涓€涓笓涓氱殑AI琛屼笟鍒嗘瀽甯堛€傝鏍规嵁鏈€鏂颁俊鎭紝鐢熸垚涓€浠藉畬鏁寸殑AI琛屼笟鏃ユ姤銆?
-
-鎶ュ憡蹇呴』鍖呭惈浠ヤ笅涓夐儴鍒嗭紝涓ユ牸鎸夋牸寮忚緭鍑篗arkdown锛?
-
-## 涓€銆佸叏鐞傾I/绉戞妧/鎶曡祫鏈€鏂版柊闂?
-鎼滅储骞舵暣鐞嗕粖澶╂渶鏂扮殑鍏ㄧ悆AI銆佺鎶€銆佹姇璧勯鍩熷姩鎬侊紝鍖呮嫭閲嶈妯″瀷鍙戝竷銆佽瀺璧勪簨浠躲€佷骇鍝佹洿鏂般€佹斂绛栧姩鍚戠瓑锛屾暣鐞嗕负5-10鏉¤鐐癸紝閲嶈鏁版嵁鍔犵矖銆?
-
-## 浜屻€佷腑鍥紸I鍒涗笟鍏徃鏁版嵁鍒嗘瀽
-鎼滅储鍥藉唴AI鍒涗笟鍏徃鏈€鏂板姩鎬侊紝鑱氱劍浠ヤ笅缁村害锛?
-- 铻嶈祫/鎶曡祫鍔ㄤ綔锛堥噾棰濄€佽疆娆°€佹姇璧勬柟锛?
-- 缁嗗垎璧涢亾锛堝叿韬櫤鑳?AI Agent/AI鍖荤枟/AI鑺墖绛夛級
-- 鏈夊彂灞曟綔鍔涚殑鏂板叴鍏徃
-杈撳嚭缁撴瀯鍖栧垎鏋愶紙琛ㄦ牸+瑕佺偣锛夛紝鑷冲皯瑕嗙洊5瀹跺叕鍙搞€?
-
-## 涓夈€佷笂娴稟I鐩稿叧娲诲姩鏁寸悊
-鎼滅储鍏紬鍙枫€佸皬绾功銆佷粖鏃ュご鏉°€丩uma绛夊钩鍙颁笂杩戞湡鍦ㄤ笂娴蜂妇鍔炵殑AI鐩稿叧娲诲姩锛堢嚎涓嬫矙榫欍€佽鍧涖€丮eetup銆丏emo Day绛夛級锛屾暣鐞嗕负琛ㄦ牸锛屽寘鍚細娲诲姩鍚嶇О銆佹椂闂淬€佸湴鐐广€佹姤鍚嶆笭閬?閾炬帴銆傞噸鐐瑰叧娉ㄨ繎7澶╁唴鍙姤鍚嶇殑娲诲姩銆?
-
-鏍煎紡瑕佹眰锛?
-- 浣跨敤涓枃
-- 閲嶈鏁版嵁鐢?*鍔犵矖**
-- 姣忛儴鍒嗘湁灏忔爣棰樺拰瑕佺偣
-- 鎶ュ憡寮€澶村啓鏄庢棩鏈熷拰绫诲瀷锛堟棭鎶?鏅氭姤锛?
-- 缁撳熬鏍囨敞"鐢?AI 鑷姩鐢熸垚"
-"""
-
-user_prompt = "璇风敓鎴? + date_str + "鐨凙I琛屼笟鏃ユ姤锛岄噸鐐瑰叧娉ㄤ粖澶╁拰杩戞湡鐨勬渶鏂板姩鎬併€?
-
-api_key = os.environ.get('NVIDIA_API_KEY')
-
-if api_key:
-    url = "https://integrate.api.nvidia.com/v1/chat/completions"
-    headers = {
-        "Authorization": "Bearer " + api_key,
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "nvidia/llama-3.1-nemotron-70b-instruct",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        "max_tokens": 4000,
-        "temperature": 0.7
-    }
-    
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code == 200:
-        result = response.json()
-        content = result['choices'][0]['message']['content']
-    else:
-        content = "# AI Daily Report " + date_str + file_suffix + "\n\n[API Error: " + str(response.status_code) + "]\n"
-else:
-    content = "# AI Daily Report " + date_str + file_suffix + "\n\n[Please set NVIDIA_API_KEY in GitHub Secrets]\n"
-
-with open(filename, 'w', encoding='utf-8') as f:
-    f.write(content)
-
-print("Report generated: " + filename)
-
-with open(os.environ.get('GITHUB_OUTPUT', '/tmp/github_output'), 'a') as f:
-    f.write("filename=" + filename + "\n")
-ENDOFFILE
-
-      - name: Run generate script
+      - name: Generate AI Report
         env:
           NVIDIA_API_KEY: ${{ env.NVIDIA_API_KEY }}
           GITHUB_OUTPUT: ${{ env.GITHUB_OUTPUT }}
-        run: python3 generate_report.py
+        run: python3 scripts/generate_report.py
 
       - name: Commit and push report
         run: |
@@ -124,40 +47,7 @@ ENDOFFILE
         if: env.SERVERCHAN_SCKEY != ''
         env:
           SERVERCHAN_SCKEY: ${{ env.SERVERCHAN_SCKEY }}
-        run: |
-          python3 << 'PYEOF'
-import os
-import requests
-from datetime import datetime
-import glob
-
-sckey = os.environ.get('SERVERCHAN_SCKEY')
-now = datetime.now()
-is_pm = now.hour >= 12
-report_type = "Evening" if is_pm else "Morning"
-
-files = sorted(glob.glob("AI鏃ユ姤_*.md"))
-if files:
-    latest = files[-1]
-    with open(latest, 'r', encoding='utf-8') as f:
-        content = f.read()
-else:
-    content = "[No report generated]"
-
-summary = content[:500] + "..." if len(content) > 500 else content
-
-url = "https://sc.ftqq.com/" + sckey + ".send"
-data = {
-    "text": "AI Daily Report " + report_type + " | " + now.strftime('%m/%d %H:%M'),
-    "desp": "**GitHub**: https://github.com/dudujiaoshou/ai-daily-reports\n\n---\n" + summary
-}
-
-try:
-    resp = requests.post(url, data=data)
-    print("Notification sent: " + resp.text)
-except Exception as e:
-    print("Notification failed: " + str(e))
-PYEOF
+        run: python3 scripts/send_notification.py
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
