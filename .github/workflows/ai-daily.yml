@@ -1,4 +1,4 @@
-name: AI Daily Report
+﻿name: AI Daily Report
 
 on:
   schedule:
