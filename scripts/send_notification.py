@@ -9,10 +9,9 @@ now = datetime.now()
 is_pm = now.hour >= 12
 report_type = "Evening" if is_pm else "Morning"
 
-# Find the latest report file
-files = glob.glob("AI鏃ユ姤_*.md")
+files = sorted(glob.glob("AI-Report_*.md"))
 if files:
-    latest = max(files)
+    latest = files[-1]
     with open(latest, 'r', encoding='utf-8') as f:
         content = f.read()
 else:
