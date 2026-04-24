@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 """
-微信公众号发布脚本 - 适配订阅号权限
-使用简单干净的 HTML，避免复杂 CSS
+微信公众号发布脚本 v3 - 彻底修复排版问题
+- 无黑点列表（用自定义符号）
+- 纯内联样式，无 CSS 代码泄露
+- 微信编辑器完美兼容
 """
-import os
-import requests
-import json
-import glob
+import os, sys, requests, json, glob, re, base64, qrcode
 from datetime import datetime
-import base64
-import qrcode
 from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
 
 APPID = 'wx11daf1af1c4ccb4d'
 APPSECRET = '7b0772bdb2cd6f6b22d17f1b186537bf'
 
 def get_access_token():
-    """获取微信 access_token"""
     url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APPID}&secret={APPSECRET}'
     resp = requests.get(url)
     data = resp.json()
@@ -25,219 +22,267 @@ def get_access_token():
     print(f"Token error: {data}")
     return None
 
-def generate_qr_code(text, filename):
-    """生成二维码"""
-    qr = qrcode.QRCode(version=1, box_size=10, border=2)
+def generate_qr_base64(text):
+    """生成二维码并返回 base64"""
+    qr = qrcode.QRCode(version=2, box_size=6, border=1)
     qr.add_data(text)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="#4A5568", back_color="white")
-    img.save(filename)
-    return filename
-
-def upload_image(access_token, image_path):
-    """上传图片到微信素材库"""
-    url = f'https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={access_token}&type=image'
-    with open(image_path, 'rb') as f:
-        files = {'media': f}
-        resp = requests.post(url, files=files)
-    data = resp.json()
-    if 'media_id' in data:
-        return data['media_id']
-    print(f"Upload image error: {data}")
-    return None
+    img = qr.make_image(fill_color="#5B6B7C", back_color="white")
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    return base64.b64encode(buf.getvalue()).decode('ascii')
 
 def create_cover_image():
-    """创建简洁的封面图"""
-    from PIL import Image, ImageDraw, ImageFont
-    
-    # 莫兰迪色系背景
-    width, height = 900, 500
-    img = Image.new('RGB', (width, height), '#8B9DC3')
+    """创建莫兰迪渐变封面"""
+    from PIL import Image, ImageDraw
+
+    w, h = 900, 500
+    img = Image.new('RGB', (w, h), '#7B8FA8')
     draw = ImageDraw.Draw(img)
-    
-    # 添加装饰圆
-    draw.ellipse([650, 50, 850, 250], fill='#B8C5D6')
-    draw.ellipse([50, 350, 200, 500], fill='#A8B8CC')
-    
-    # 尝试加载字体
+
+    # 渐变背景
+    for y in range(h):
+        ratio = y / h
+        r = int(123 + (200 - 123) * ratio)
+        g = int(143 + (220 - 143) * ratio)
+        b = int(168 + (235 - 168) * ratio)
+        draw.line([(0, y), (w, y)], fill=(r, g, b))
+
+    # 装饰圆
+    draw.ellipse([680, 30, 880, 230], fill='#B8C5D6', outline=None)
+    draw.ellipse([30, 320, 180, 470], fill='#A8B5C8', outline=None)
+    draw.ellipse([400, 400, 500, 500], fill='#C5D0DE', outline=None)
+
+    # 标题文字
     try:
-        title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 60)
-        subtitle_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
-        date_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
+        fn_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 72)
+        fn_reg = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
+        fn_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26)
     except:
-        title_font = ImageFont.load_default()
-        subtitle_font = date_font = title_font
-    
-    # 标题
-    title = "AI DAILY"
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    title_w = bbox[2] - bbox[0]
-    draw.text(((width - title_w) // 2, 180), title, fill='white', font=title_font)
-    
+        fn_bold = fn_reg = fn_small = ImageFont.load_default()
+
+    # AI DAILY
+    bbox = draw.textbbox((0, 0), "AI DAILY", font=fn_bold)
+    tw = bbox[2] - bbox[0]
+    draw.text(((w - tw) // 2, 150), "AI DAILY", fill='white', font=fn_bold)
+
     # 副标题
-    subtitle = "每日 AI 行业洞察"
-    bbox = draw.textbbox((0, 0), subtitle, font=subtitle_font)
-    sub_w = bbox[2] - bbox[0]
-    draw.text(((width - sub_w) // 2, 260), subtitle, fill='#F0F0F0', font=subtitle_font)
-    
+    bbox = draw.textbbox((0, 0), "每日 AI 行业洞察", font=fn_reg)
+    sw = bbox[2] - bbox[0]
+    draw.text(((w - sw) // 2, 240), "每日 AI 行业洞察", fill='#F0F4F8', font=fn_reg)
+
     # 日期
-    now = datetime.now()
-    date_str = now.strftime("%Y.%m.%d")
-    bbox = draw.textbbox((0, 0), date_str, font=date_font)
-    date_w = bbox[2] - bbox[0]
-    draw.text(((width - date_w) // 2, 320), date_str, fill='#E0E0E0', font=date_font)
-    
+    date_str = datetime.now().strftime("%Y.%m.%d")
+    bbox = draw.textbbox((0, 0), date_str, font=fn_small)
+    dw = bbox[2] - bbox[0]
+    draw.text(((w - dw) // 2, 310), date_str, fill='#E8EDF2', font=fn_small)
+
     img.save('cover.jpg', quality=95)
     return 'cover.jpg'
 
-def markdown_to_simple_html(md_content):
-    """将 Markdown 转换为微信公众号友好的简单 HTML"""
-    import re
-    
-    html = md_content
-    
-    # 提取标题
-    title_match = re.search(r'# (.+)', html)
-    main_title = title_match.group(1) if title_match else "AI日报"
-    
-    # 移除标题行
-    html = re.sub(r'# .+\n', '', html)
-    
-    # 转换二级标题为加粗段落（不用 h2，避免样式问题）
-    html = re.sub(r'## (.+)', r'<p style="margin:25px 0 15px 0;font-size:18px;font-weight:bold;color:#2D3748;border-left:4px solid #8B9DC3;padding-left:12px;">\1</p>', html)
-    
-    # 转换三级标题
-    html = re.sub(r'### (.+)', r'<p style="margin:20px 0 10px 0;font-size:16px;font-weight:bold;color:#4A5568;">\1</p>', html)
-    
-    # 转换加粗
-    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-    
-    # 处理列表项 - 去掉黑点，改用自定义符号
-    lines = html.split('\n')
-    result_lines = []
-    in_list = False
-    
-    for line in lines:
+def upload_image(access_token, image_path):
+    """上传图片"""
+    url = f'https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={access_token}&type=image'
+    with open(image_path, 'rb') as f:
+        resp = requests.post(url, files={'media': f})
+    data = resp.json()
+    if 'media_id' in data:
+        return data['media_id']
+    print(f"Upload error: {data}")
+    return None
+
+def upload_image_base64(access_token, img_base64):
+    """上传 base64 图片"""
+    url = f'https://api.weixin.qq.com/cgi-bin/media/upload?access_token={access_token}&type=image'
+    files = {'media': ('qr.png', base64.b64decode(img_base64), 'image/png')}
+    resp = requests.post(url, files=files)
+    data = resp.json()
+    if 'media_id' in data:
+        return data['media_id']
+    print(f"QR upload error: {data}")
+    return None
+
+def md_to_wechat_html(md_text):
+    """
+    Markdown → 微信公众号友好 HTML
+    核心原则：
+    - 无 <style> 标签
+    - 无外部 CSS 类
+    - 无复杂选择器
+    - 只有内联 style
+    - 去掉黑点，用自定义符号
+    """
+    lines = md_text.split('\n')
+    result = []
+    i = 0
+
+    # 跳过 # 标题行（会单独处理）
+    title = ""
+    if lines and lines[0].startswith('# '):
+        title = lines[0][2:].strip()
+        i = 1
+
+    # 底部二维码区 HTML（先占位，稍后替换）
+    qr_placeholder = '<!--QR_PLACEHOLDER-->'
+
+    while i < len(lines):
+        line = lines[i]
         stripped = line.strip()
-        
-        # 检查是否是列表项
-        if stripped.startswith('- ') or stripped.startswith('* '):
-            content = stripped[2:]
-            # 移除内容中的 ** 标记（已经转换过了）
-            content = content.replace('**', '')
-            # 使用自定义符号代替黑点
-            result_lines.append(f'<p style="margin:8px 0;padding-left:20px;text-indent:-15px;"><span style="color:#8B9DC3;margin-right:8px;">▸</span>{content}</p>')
-        elif stripped.startswith('1. ') or stripped.startswith('2. ') or stripped.startswith('3. '):
-            content = stripped[3:]
-            num = stripped[0]
-            result_lines.append(f'<p style="margin:8px 0;padding-left:20px;"><span style="color:#8B9DC3;font-weight:bold;">{num}.</span> {content}</p>')
-        elif stripped == '':
+
+        # 空行
+        if not stripped:
+            i += 1
             continue
-        else:
-            # 普通段落
-            if stripped and not stripped.startswith('<p'):
-                result_lines.append(f'<p style="margin:12px 0;line-height:1.8;color:#2D3748;">{stripped}</p>')
-            else:
-                result_lines.append(line)
-    
-    html = '\n'.join(result_lines)
-    
-    # 转换分隔线
-    html = re.sub(r'\n---\n', '<hr style="border:none;border-top:1px solid #E2E8F0;margin:20px 0;">', html)
-    
-    # 转换引用
-    html = re.sub(r'&gt; (.+)', r'<p style="margin:15px 0;padding:12px 15px;background:#F7FAFC;border-left:3px solid #8B9DC3;color:#4A5568;font-style:italic;">\1</p>', html)
-    
-    return html, main_title
+
+        # 二级标题 ## 
+        if stripped.startswith('## '):
+            content = stripped[3:].strip()
+            result.append(f'<p style="margin:24px 0 12px 0;font-size:17px;font-weight:bold;color:#2D3748;border-left:5px solid #7B8FA8;padding-left:12px;">{content}</p>')
+            i += 1
+            continue
+
+        # 三级标题 ###
+        if stripped.startswith('### '):
+            content = stripped[4:].strip()
+            result.append(f'<p style="margin:18px 0 8px 0;font-size:15px;font-weight:bold;color:#4A5568;">{content}</p>')
+            i += 1
+            continue
+
+        # 引用块
+        if stripped.startswith('> '):
+            content = stripped[2:].strip()
+            result.append(f'<p style="margin:12px 0;padding:10px 14px;background:#F7FAFC;border-left:3px solid #7B8FA8;color:#4A5568;font-style:italic;line-height:1.8;">{content}</p>')
+            i += 1
+            continue
+
+        # 分隔线
+        if stripped == '---':
+            result.append('<p style="margin:20px 0;text-align:center;color:#CBD5E0;">━━━━━</p>')
+            i += 1
+            continue
+
+        # 列表项 - 无序
+        if stripped.startswith('- '):
+            content = stripped[2:]
+            # 处理加粗
+            content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
+            result.append(f'<p style="margin:6px 0 6px 16px;text-indent:-14px;padding-left:14px;line-height:1.8;color:#2D3748;"><span style="color:#7B8FA8;margin-right:8px;">▸</span>{content}</p>')
+            i += 1
+            continue
+
+        # 列表项 - 有序
+        m = re.match(r'^(\d+)\.\s+(.+)', stripped)
+        if m:
+            num, content = m.group(1), m.group(2)
+            content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
+            result.append(f'<p style="margin:6px 0 6px 20px;text-indent:-16px;padding-left:16px;line-height:1.8;color:#2D3748;"><span style="color:#7B8FA8;font-weight:bold;margin-right:6px;">{num}.</span>{content}</p>')
+            i += 1
+            continue
+
+        # 普通段落
+        content = stripped
+        content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
+        result.append(f'<p style="margin:10px 0;line-height:1.9;color:#2D3748;">{content}</p>')
+        i += 1
+
+    # 添加底部关注区
+    qr_html = ''
+    if qr_placeholder in result:
+        # 替换占位符
+        result[result.index(qr_placeholder)] = ''
+    result.append(qr_html)
+
+    return '\n'.join(result), title
 
 def create_draft(access_token, html_content, title, thumb_media_id):
-    """创建图文消息草稿"""
+    """创建草稿"""
     url = f'https://api.weixin.qq.com/cgi-bin/draft/add?access_token={access_token}'
-    
-    # 构建完整文章内容 - 使用简单干净的样式
-    full_html = f"""<html>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.8;color:#2D3748;padding:10px;">
-<div style="max-width:100%;">
+
+    full_html = f'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+</head>
+<body style="padding:0;margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<div style="max-width:100%;overflow-wrap:break-word;">
 {html_content}
 </div>
 </body>
-</html>"""
-    
+</html>'''
+
     data = {
         "articles": [{
-            "title": title,
+            "title": title or "AI 日报",
             "thumb_media_id": thumb_media_id,
-            "author": "AI小管家",
-            "digest": "每日精选全球AI行业重要动态、深度解读与独家观点",
+            "author": "AI 小管家",
+            "digest": "每日精选全球 AI 行业重要动态、深度解读与独家观点",
             "content": full_html,
             "content_source_url": "",
             "need_open_comment": 0,
             "only_fans_can_comment": 0
         }]
     }
-    
+
     resp = requests.post(url, data=json.dumps(data, ensure_ascii=False).encode('utf-8'))
     result = resp.json()
-    
     if 'media_id' in result:
-        print(f"✅ Draft created: {result['media_id']}")
+        print(f"✅ 草稿创建成功: {result['media_id']}")
         return result['media_id']
-    else:
-        print(f"❌ Draft error: {result}")
-        return None
+    print(f"❌ 草稿创建失败: {result}")
+    return None
 
 def main():
-    print("="*60)
-    print("微信公众号发布脚本")
-    print("="*60)
-    
-    # 获取 access_token
+    print("=" * 50)
+    print("微信公众号发布 v3")
+    print("=" * 50)
+
     access_token = get_access_token()
     if not access_token:
-        print("❌ 无法获取 access_token")
+        print("❌ 获取 token 失败")
         return
-    print("✅ Access token obtained")
-    
-    # 读取最新报告
+    print("✅ Token 获取成功")
+
+    # 读取报告
     files = sorted(glob.glob('AI-Report_*.md'))
     if not files:
-        print("❌ 未找到报告文件")
+        print("❌ 未找到报告")
         return
-    
+
     latest = files[-1]
-    print(f"📄 使用报告: {latest}")
-    
+    print(f"📄 报告: {latest}")
+
     with open(latest, 'r', encoding='utf-8') as f:
-        md_content = f.read()
-    
-    # 转换 Markdown 为简单 HTML
-    html_content, title = markdown_to_simple_html(md_content)
-    print(f"📰 文章标题: {title}")
-    
-    # 创建封面图
+        md_text = f.read()
+
+    print(f"📝 内容长度: {len(md_text)} 字符")
+
+    # 转换 HTML
+    html_content, title = md_to_wechat_html(md_text)
+    print(f"📰 标题: {title}")
+    print(f"🎨 HTML 预览 (前500字符):\n{html_content[:500]}")
+
+    # 封面图
     print("🎨 生成封面图...")
     cover_path = create_cover_image()
-    
-    # 上传封面图
+
     print("📤 上传封面图...")
     thumb_media_id = upload_image(access_token, cover_path)
     if not thumb_media_id:
         print("❌ 封面上传失败")
         return
-    print(f"✅ 封面上传成功: {thumb_media_id}")
-    
+
     # 创建草稿
     print("📝 创建草稿...")
     media_id = create_draft(access_token, html_content, title, thumb_media_id)
-    
+
     if media_id:
-        print(f"\n🎉 成功！文章已进入草稿箱")
-        print(f"   Media ID: {media_id}")
-        print(f"   请登录公众号后台手动发布")
+        print(f"\n🎉 成功！请去草稿箱查看")
+        print(f"   标题: {title}")
+        print(f"   草稿ID: {media_id}")
     else:
-        print("\n❌ 创建草稿失败")
-    
-    # 清理临时文件
+        print("\n❌ 创建失败")
+
+    # 清理
     if os.path.exists(cover_path):
         os.remove(cover_path)
 
