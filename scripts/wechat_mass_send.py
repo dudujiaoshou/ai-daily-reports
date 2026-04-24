@@ -6,6 +6,7 @@ import sys
 import struct
 import zlib
 import markdown
+import json
 
 # 微信配置
 APPID = 'wx11daf1af1c4ccb4d'
@@ -170,7 +171,9 @@ def add_draft(token, title, content, thumb_media_id):
             }
         ]
     }
-    resp = requests.post(url, json=payload)
+    # 关键：使用 ensure_ascii=False 保持中文字符
+    json_data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+    resp = requests.post(url, data=json_data, headers={'Content-Type': 'application/json; charset=utf-8'})
     return resp.json()
 
 print('微信发布 - AI 日报推送')
