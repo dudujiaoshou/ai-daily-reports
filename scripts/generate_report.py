@@ -3,11 +3,10 @@
 from __future__ import print_function
 import os
 import sys
-import json
-import requests
+import subprocess
 from datetime import datetime
 
-# Force UTF-8 output
+# Force UTF-8
 if sys.version_info[0] >= 3:
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -17,97 +16,79 @@ github_output = os.environ.get('GITHUB_OUTPUT', '')
 
 if not api_key:
     print('NVIDIA_API_KEY not found')
-    now = datetime.now()
-    is_pm = now.hour >= 12
-    suffix = '_PM' if is_pm else '_AM'
-    filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write('# Error: NVIDIA_API_KEY not configured')
-    if github_output:
-        with open(github_output, 'a', encoding='utf-8') as f:
-            f.write('filename=' + filename + '\n')
     exit(1)
-
-url = 'https://integrate.api.nvidia.com/v1/chat/completions'
 
 now = datetime.now()
 is_pm = now.hour >= 12
-date_str = now.strftime('%Y') + ' year ' + now.strftime('%m') + ' month ' + now.strftime('%d') + ' day'
-report_type = 'PM' if is_pm else 'AM'
+suffix = '_PM' if is_pm else '_AM'
+filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
 
-system_prompt = """You are a professional AI industry analyst. Generate a daily AI industry report.
-
-Report format:
-# AI Daily Report DATE TIME
-
-## Global AI/Tech/Investment News
-- News title: Brief analysis
-
-## China AI Startup Dynamics
-- Company: [Amount] | [Investor] | [Field] | [Analysis]
-
-## Shanghai AI Events
-- Event: [Date] | [Venue]
-
-Total: 500-800 words."""
-
-user_prompt = 'Please generate AI daily report for today.'
+# Build the API request using curl (handles encoding better)
+import json
 
 payload = {
     'model': 'meta/llama-3.3-70b-instruct',
     'messages': [
-        {'role': 'system', 'content': system_prompt},
-        {'role': 'user', 'content': user_prompt}
+        {'role': 'user', 'content': 'Generate a short AI industry news report in Chinese. Include: 1) Global AI tech news, 2) China AI startup funding, 3) Shanghai AI events. Format as Markdown.'}
     ],
     'max_tokens': 2000,
     'temperature': 0.7
 }
 
-# Use ONLY ASCII headers to avoid latin-1 encoding error
-headers = {
-    'Authorization': 'Bearer ' + api_key,
-    'Content-Type': 'application/json'
-}
+json_data = json.dumps(payload)
 
+# Write JSON to temp file to avoid shell encoding issues
+with open('/tmp/request.json', 'w', encoding='utf-8') as f:
+    f.write(json_data)
+
+# Use curl with explicit headers
+cmd = [
+    'curl', '-s', '-X', 'POST',
+    'https://integrate.api.nvidia.com/v1/chat/completions',
+    '-H', 'Authorization: Bearer ' + api_key,
+    '-H', 'Content-Type: application/json',
+    '-d', '@/tmp/request.json',
+    '--max-time', '120'
+]
+
+print('Calling NVIDIA API with curl...')
 try:
-    # Use json=payload which handles encoding properly
-    print('Calling NVIDIA API...')
-    response = requests.post(url, headers=headers, json=payload, timeout=120)
+    result = subprocess.run(cmd, capture_output=True, timeout=130)
+    response_text = result.stdout.decode('utf-8', errors='replace')
     
-    if response.status_code == 200:
-        result = response.json()
-        content = result['choices'][0]['message']['content']
-        
-        suffix = '_PM' if is_pm else '_AM'
-        filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
-        
+    if result.returncode != 0:
+        stderr_text = result.stderr.decode('utf-8', errors='replace')
+        print('Curl error:', stderr_text)
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write('# Error\n\nCurl error: ' + stderr_text)
+        if github_output:
+            with open(github_output, 'a', encoding='utf-8') as f:
+                f.write('filename=' + filename + '\n')
+        exit(1)
+    
+    # Parse response
+    response = json.loads(response_text)
+    
+    if 'choices' in response:
+        content = response['choices'][0]['message']['content']
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
-        
         print('Report generated: ' + filename)
-        print('Length: ' + str(len(content)))
+        print('Length:', len(content))
         
         if github_output:
             with open(github_output, 'a', encoding='utf-8') as f:
                 f.write('filename=' + filename + '\n')
     else:
-        print('API Error: ' + str(response.status_code))
-        print('Response: ' + response.text[:500])
-        
-        suffix = '_PM' if is_pm else '_AM'
-        filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
-        
+        print('API Error:', response)
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write('# Error\n\nStatus: ' + str(response.status_code) + '\n\n' + response.text)
-        
+            f.write('# Error\n\n' + json.dumps(response, indent=2))
         if github_output:
             with open(github_output, 'a', encoding='utf-8') as f:
                 f.write('filename=' + filename + '\n')
                 
-except requests.exceptions.Timeout:
+except subprocess.TimeoutExpired:
     print('Request timeout')
-    suffix = '_PM' if is_pm else '_AM'
-    filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
     with open(filename, 'w', encoding='utf-8') as f:
         f.write('# Timeout\n\nThe request timed out.')
     if github_output:
@@ -116,10 +97,8 @@ except requests.exceptions.Timeout:
             
 except Exception as e:
     import traceback
-    print('Error: ' + str(e))
+    print('Error:', str(e))
     traceback.print_exc()
-    suffix = '_PM' if is_pm else '_AM'
-    filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
     with open(filename, 'w', encoding='utf-8') as f:
         f.write('# Error\n\n' + str(e) + '\n\n' + traceback.format_exc())
     if github_output:
