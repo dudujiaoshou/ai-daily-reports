@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import os
+import sys
 import json
 import requests
 from datetime import datetime
+
+# Force UTF-8 output
+if sys.version_info[0] >= 3:
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 api_key = os.environ.get('NVIDIA_API_KEY')
 github_output = os.environ.get('GITHUB_OUTPUT', '')
 
 if not api_key:
-    print('NVIDIA_API_KEY not found in environment variables')
+    print('NVIDIA_API_KEY not found')
     now = datetime.now()
     is_pm = now.hour >= 12
     suffix = '_PM' if is_pm else '_AM'
     filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write('# Error: NVIDIA_API_KEY not configured\n\nPlease set the NVIDIA_API_KEY in GitHub Secrets.')
+        f.write('# Error: NVIDIA_API_KEY not configured')
     if github_output:
         with open(github_output, 'a', encoding='utf-8') as f:
             f.write('filename=' + filename + '\n')
@@ -25,43 +32,26 @@ url = 'https://integrate.api.nvidia.com/v1/chat/completions'
 
 now = datetime.now()
 is_pm = now.hour >= 12
-date_str = now.strftime('%Y年%m月%d日')
-report_type = '下午' if is_pm else '上午'
+date_str = now.strftime('%Y') + ' year ' + now.strftime('%m') + ' month ' + now.strftime('%d') + ' day'
+report_type = 'PM' if is_pm else 'AM'
 
-system_prompt = '''你是一位专业的AI行业分析师。你的任务是生成一份综合的每日AI行业报告，日期为''' + date_str + '''。
+system_prompt = """You are a professional AI industry analyst. Generate a daily AI industry report.
 
-# 输出格式要求
-1. 语言：简体中文
-2. 格式：Markdown格式，包含标题、项目符号和结构化内容
-3. 日期：报告中必须明确标注当前日期
+Report format:
+# AI Daily Report DATE TIME
 
-# 报告结构
-请生成一份包含以下三个板块的日报：
+## Global AI/Tech/Investment News
+- News title: Brief analysis
 
-## 板块1：全球AI/Tech/投资新闻
-- 过去24小时内最重要的5-8条AI相关新闻
-- 覆盖：AI突破性进展、科技公司动态、投资融资、政策更新等
-- 每条新闻需要有简短分析（1-2句话）
-- 格式：- **新闻标题**：分析
+## China AI Startup Dynamics
+- Company: [Amount] | [Investor] | [Field] | [Analysis]
 
-## 板块2：中国AI创业公司数据分析
-- 3-5家中国AI创业公司近期动态
-- 包含：融资金额、投资方、领域、以及分析
-- 重点关注：具身智能（机器人）、AI Agents、中国模型进展
-- 格式：- **公司名**：[金额] | [投资方] | [领域] | [分析]
+## Shanghai AI Events
+- Event: [Date] | [Venue]
 
-## 板块3：上海AI相关活动
-- 3-5个即将举办或近期举办的AI活动
-- 包含：活动名称、日期、场地、主办方、报名链接（如有）
-- 格式：- **活动名**：[日期] | [场地] | [主办方] | [报名链接]
+Total: 500-800 words."""
 
-# 内容标准
-- 内容要具体，包含数据、人名、金额等信息
-- 提供你自己的分析和洞察，不仅仅是罗列事实
-- 突出投资机会和风险
-- 总字数：800-1500个中文字符'''
-
-user_prompt = '请为' + date_str + '生成一份专业的AI行业日报，涵盖全球AI新闻、中国AI创业动态和上海AI活动。'
+user_prompt = 'Please generate AI daily report for today.'
 
 payload = {
     'model': 'meta/llama-3.3-70b-instruct',
@@ -69,20 +59,20 @@ payload = {
         {'role': 'system', 'content': system_prompt},
         {'role': 'user', 'content': user_prompt}
     ],
-    'max_tokens': 4000,
+    'max_tokens': 2000,
     'temperature': 0.7
 }
 
+# Use ONLY ASCII headers to avoid latin-1 encoding error
 headers = {
     'Authorization': 'Bearer ' + api_key,
-    'Content-Type': 'application/json; charset=utf-8'
+    'Content-Type': 'application/json'
 }
 
 try:
-    # KEY FIX: Manual JSON encoding with UTF-8 to avoid latin-1 codec error
-    json_data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-    print('Calling NVIDIA API with model: meta/llama-3.3-70b-instruct')
-    response = requests.post(url, headers=headers, data=json_data, timeout=120)
+    # Use json=payload which handles encoding properly
+    print('Calling NVIDIA API...')
+    response = requests.post(url, headers=headers, json=payload, timeout=120)
     
     if response.status_code == 200:
         result = response.json()
@@ -94,36 +84,32 @@ try:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
         
-        print('Report generated successfully: ' + filename)
-        print('Content length: ' + str(len(content)) + ' chars')
+        print('Report generated: ' + filename)
+        print('Length: ' + str(len(content)))
         
         if github_output:
             with open(github_output, 'a', encoding='utf-8') as f:
                 f.write('filename=' + filename + '\n')
     else:
         print('API Error: ' + str(response.status_code))
-        print('Response: ' + response.text)
+        print('Response: ' + response.text[:500])
         
         suffix = '_PM' if is_pm else '_AM'
         filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
         
-        error_content = '# AI Daily Report - Error\n\n**Date**: ' + date_str + ' ' + report_type + '\n\n## Error Information\n\n**API Status Code**: ' + str(response.status_code) + '\n\n**Error Details**:\n```\n' + response.text + '\n```\n\nPlease check the NVIDIA API key and endpoint configuration.\n'
-        
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(error_content)
+            f.write('# Error\n\nStatus: ' + str(response.status_code) + '\n\n' + response.text)
         
         if github_output:
             with open(github_output, 'a', encoding='utf-8') as f:
                 f.write('filename=' + filename + '\n')
                 
 except requests.exceptions.Timeout:
-    print('Request timeout - API took too long to respond')
+    print('Request timeout')
     suffix = '_PM' if is_pm else '_AM'
     filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
-    
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write('# AI Daily Report - Timeout\n\n**Date**: ' + date_str + ' ' + report_type + '\n\n## Error Information\n\nThe NVIDIA API request timed out. Please try again later or check the API status.\n')
-    
+        f.write('# Timeout\n\nThe request timed out.')
     if github_output:
         with open(github_output, 'a', encoding='utf-8') as f:
             f.write('filename=' + filename + '\n')
@@ -134,10 +120,8 @@ except Exception as e:
     traceback.print_exc()
     suffix = '_PM' if is_pm else '_AM'
     filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
-    
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write('# AI Daily Report - Error\n\n**Date**: ' + date_str + ' ' + report_type + '\n\n## Error Information\n\n**Error**: ' + str(e) + '\n\n```\n' + traceback.format_exc() + '\n```\n')
-    
+        f.write('# Error\n\n' + str(e) + '\n\n' + traceback.format_exc())
     if github_output:
         with open(github_output, 'a', encoding='utf-8') as f:
             f.write('filename=' + filename + '\n')
