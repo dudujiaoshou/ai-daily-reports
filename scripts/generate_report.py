@@ -147,7 +147,7 @@ result = subprocess.run(
      '-H', 'Content-Type: application/json',
      '-d', '@/tmp/request.json',
      '-w', '\n%{http_code}'],
-    capture_output=True, timeout=180,
+    capture_output=True, timeout=360,
     cwd='/tmp'
 )
 
