@@ -12,7 +12,6 @@ url = 'https://integrate.api.nvidia.com/v1/chat/completions'
 now = datetime.now()
 is_pm = now.hour >= 12
 date_str = now.strftime('%Y年%m月%d日')
-report_type = '下午' if is_pm else '上午'
 
 system_prompt = """你是一位专业的AI行业分析师。请为当前日期生成一份综合的每日AI行业报告。
 报告必须包含三个板块，全部使用简体中文：
@@ -35,22 +34,25 @@ payload = {
 
 req_headers = {
     'Authorization': 'Bearer ' + api_key,
-    'Content-Type': 'application/json; charset=utf-8'
+    'Content-Type': 'application/json; charset=utf-8',
+    'Accept': 'application/json'
 }
 
+print('Calling NVIDIA API...')
 try:
-    print('Calling NVIDIA API...')
     resp = requests.post(url, headers=req_headers, json=payload, timeout=120)
     print(f'Response status: {resp.status_code}')
 
     if resp.status_code == 200:
-        result = resp.json()
+        # CRITICAL: Manually decode response with UTF-8 to avoid latin-1 errors
+        raw_text = resp.content.decode('utf-8')
+        result = json.loads(raw_text)
         content = result['choices'][0]['message']['content']
         suffix = '_PM' if is_pm else '_AM'
         filename = f"AI-Report_{now.strftime('%Y-%m-%d')}{suffix}.md"
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
-        print(f'Report saved: {filename}')
+        print(f'Report saved: {filename} ({len(content)} chars)')
         github_output = os.environ.get('GITHUB_OUTPUT', '')
         if github_output:
             with open(github_output, 'a', encoding='utf-8') as f:
@@ -59,5 +61,6 @@ try:
         print(f'API Error {resp.status_code}: {resp.text[:200]}')
         sys.exit(1)
 except Exception as e:
-    print(f'Exception: {e}')
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
