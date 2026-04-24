@@ -52,10 +52,10 @@ system_prompt = """你是一位资深的AI行业研究员，为【AI前线日报
 5. 语言精炼、专业、有洞见
 6. 避免空洞的套话，每句话都要有价值"""
 
-user_prompt = f"""为{date_str}的【AI前线日报 {time_label}】撰写深度行业报告。
+user_prompt = """为""" + date_str + """的【AI前线日报 """ + time_label + """】撰写深度行业报告。
 
-今日日期：{date_str}
-当前时间：{now.strftime('%H:%M')}
+今日日期：""" + date_str + """
+当前时间：""" + now.strftime('%H:%M') + """
 
 请严格按照上述格式输出，覆盖：
 - 板块一：5-8 条全球重要 AI/科技/投资新闻（优先选有具体数据、有分析价值的）
@@ -80,38 +80,34 @@ result = subprocess.run(
      '-H', 'Authorization: Bearer ' + api_key,
      '-H', 'Content-Type: application/json',
      '-d', '@/tmp/request.json',
-     '-w', '
-%{http_code}'],
+     '-w', '\n%{http_code}'],
     capture_output=True, timeout=150,
     cwd='/tmp'
 )
 
 output = result.stdout.decode('utf-8', errors='replace')
 
-lines = output.strip().split('
-')
+lines = output.strip().split('\n')
 if len(lines) >= 2:
     http_code = lines[-1]
-    response_body = '
-'.join(lines[:-1])
+    response_body = '\n'.join(lines[:-1])
 else:
     http_code = '000'
     response_body = output
 
-print(f'HTTP code: {http_code}')
+print('HTTP code:', http_code)
 
 if http_code == '200':
     result_json = json.loads(response_body)
     content = result_json['choices'][0]['message']['content']
-    filename = f"AI-Report_{now.strftime('%Y-%m-%d')}{suffix}.md"
+    filename = "AI-Report_" + now.strftime('%Y-%m-%d') + suffix + ".md"
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(content)
-    print(f'Report saved: {filename} ({len(content)} chars)')
+    print('Report saved:', filename, '(' + str(len(content)) + ' chars)')
     github_output = os.environ.get('GITHUB_OUTPUT', '')
     if github_output:
         with open(github_output, 'a', encoding='utf-8') as f:
-            f.write(f'filename={filename}
-')
+            f.write('filename=' + filename + '\n')
 else:
-    print(f'API Error: {response_body[:500]}')
+    print('API Error:', response_body[:500])
     sys.exit(1)
