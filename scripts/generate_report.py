@@ -1,152 +1,63 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-import os
-import sys
-import subprocess
-import json
+import os, sys, json, requests
 from datetime import datetime
 
-# Force UTF-8
-if sys.version_info[0] >= 3:
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
-api_key = os.environ.get('NVIDIA_API_KEY')
-github_output = os.environ.get('GITHUB_OUTPUT', '')
-sckey = os.environ.get('SERVERCHAN_SCKEY', '')
-
+api_key = os.environ.get('NVIDIA_API_KEY', '')
 if not api_key:
-    print('NVIDIA_API_KEY not found')
-    exit(1)
+    print('ERROR: NVIDIA_API_KEY not set')
+    sys.exit(1)
 
+url = 'https://integrate.api.nvidia.com/v1/chat/completions'
 now = datetime.now()
 is_pm = now.hour >= 12
-suffix = '_PM' if is_pm else '_AM'
-filename = 'AI-Report_' + now.strftime('%Y-%m-%d') + suffix + '.md'
+date_str = now.strftime('%Y年%m月%d日')
+report_type = '下午' if is_pm else '上午'
 
-# Build payload
+system_prompt = """你是一位专业的AI行业分析师。请为当前日期生成一份综合的每日AI行业报告。
+报告必须包含三个板块，全部使用简体中文：
+1. 全球AI/Tech/投资新闻：5-8条过去24小时重要新闻，每条附1-2句分析
+2. 中国AI创业公司动态：3-5家公司，包含融资金额、投资方、领域和分析
+3. 上海AI相关活动：3-5个即将举办的活动，包含日期、场地、报名链接
+内容要具体有数据，800-1500字。"""
+
+user_prompt = f'请为{date_str}生成AI行业日报，三大板块。'
+
 payload = {
     'model': 'meta/llama-3.3-70b-instruct',
     'messages': [
-        {'role': 'user', 'content': 'Generate a short AI industry news report in Chinese. Include: 1) Global AI tech news, 2) China AI startup funding, 3) Shanghai AI events. Format as Markdown.'}
+        {'role': 'system', 'content': system_prompt},
+        {'role': 'user', 'content': user_prompt}
     ],
-    'max_tokens': 2000,
+    'max_tokens': 4000,
     'temperature': 0.7
 }
 
-json_data = json.dumps(payload)
+req_headers = {
+    'Authorization': 'Bearer ' + api_key,
+    'Content-Type': 'application/json; charset=utf-8'
+}
 
-# Write JSON to temp file
-with open('/tmp/request.json', 'w', encoding='utf-8') as f:
-    f.write(json_data)
-
-# Use curl
-cmd = [
-    'curl', '-s', '-w', '\\n%{http_code}', '-X', 'POST',
-    'https://integrate.api.nvidia.com/v1/chat/completions',
-    '-H', 'Authorization: Bearer ' + api_key,
-    '-H', 'Content-Type: application/json',
-    '-d', '@/tmp/request.json',
-    '--max-time', '120'
-]
-
-print('Calling NVIDIA API with curl...')
 try:
-    result = subprocess.run(cmd, capture_output=True, timeout=130)
-    
-    # Decode outputs
-    stdout = result.stdout.decode('utf-8', errors='replace')
-    stderr = result.stderr.decode('utf-8', errors='replace')
-    
-    print('Curl return code:', result.returncode)
-    
-    if stderr:
-        print('Curl stderr:', stderr[:500])
-    
-    # Parse response - last line is HTTP status
-    lines = stdout.strip().split('\n')
-    if len(lines) >= 2:
-        http_code = lines[-1]
-        response_body = '\n'.join(lines[:-1])
-        print('HTTP code:', http_code)
-    else:
-        http_code = ''
-        response_body = stdout
-    
-    print('Response body length:', len(response_body))
-    print('Response body preview:', response_body[:200] if response_body else '(empty)')
-    
-    if not response_body:
-        print('ERROR: Empty response from API')
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write('# Error\n\nEmpty response from NVIDIA API\nStderr: ' + stderr)
-        if github_output:
-            with open(github_output, 'a', encoding='utf-8') as f:
-                f.write('filename=' + filename + '\n')
-        exit(1)
-    
-    # Parse JSON response
-    try:
-        response = json.loads(response_body)
-    except json.JSONDecodeError as e:
-        print('JSON parse error:', str(e))
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write('# Error\n\nJSON parse error: ' + str(e) + '\n\nResponse: ' + response_body[:1000])
-        if github_output:
-            with open(github_output, 'a', encoding='utf-8') as f:
-                f.write('filename=' + filename + '\n')
-        exit(1)
-    
-    if 'choices' in response:
-        content = response['choices'][0]['message']['content']
+    print('Calling NVIDIA API...')
+    resp = requests.post(url, headers=req_headers, json=payload, timeout=120)
+    print(f'Response status: {resp.status_code}')
+
+    if resp.status_code == 200:
+        result = resp.json()
+        content = result['choices'][0]['message']['content']
+        suffix = '_PM' if is_pm else '_AM'
+        filename = f"AI-Report_{now.strftime('%Y-%m-%d')}{suffix}.md"
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
-        print('Report generated: ' + filename)
-        print('Length:', len(content))
-        
-        # Send notification
-        if sckey:
-            import requests as req
-            report_type = 'Evening' if is_pm else 'Morning'
-            summary = content[:500] + '...' if len(content) > 500 else content
-            notif_url = 'https://sctapi.ftqq.com/' + sckey + '.send'
-            notif_data = {
-                'title': 'AI Daily Report ' + report_type + ' | ' + now.strftime('%m/%d %H:%M'),
-                'desp': '**GitHub**: https://github.com/dudujiaoshou/ai-daily-reports\n\n---\n' + summary
-            }
-            try:
-                notif_resp = req.post(notif_url, data=notif_data, timeout=10)
-                print('Notification:', notif_resp.text[:100])
-            except Exception as e:
-                print('Notification error:', str(e))
-        
+        print(f'Report saved: {filename}')
+        github_output = os.environ.get('GITHUB_OUTPUT', '')
         if github_output:
             with open(github_output, 'a', encoding='utf-8') as f:
-                f.write('filename=' + filename + '\n')
+                f.write(f'filename={filename}\n')
     else:
-        print('API Error:', json.dumps(response, indent=2)[:500])
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write('# Error\n\nAPI Error: ' + json.dumps(response, indent=2))
-        if github_output:
-            with open(github_output, 'a', encoding='utf-8') as f:
-                f.write('filename=' + filename + '\n')
-                
-except subprocess.TimeoutExpired:
-    print('Request timeout')
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write('# Timeout\n\nThe request timed out.')
-    if github_output:
-        with open(github_output, 'a', encoding='utf-8') as f:
-            f.write('filename=' + filename + '\n')
-            
+        print(f'API Error {resp.status_code}: {resp.text[:200]}')
+        sys.exit(1)
 except Exception as e:
-    import traceback
-    print('Error:', str(e))
-    traceback.print_exc()
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write('# Error\n\n' + str(e) + '\n\n' + traceback.format_exc())
-    if github_output:
-        with open(github_output, 'a', encoding='utf-8') as f:
-            f.write('filename=' + filename + '\n')
+    print(f'Exception: {e}')
+    sys.exit(1)
