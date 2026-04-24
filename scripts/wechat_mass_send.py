@@ -3,7 +3,9 @@ import requests
 from datetime import datetime
 import glob
 import sys
-import base64
+import struct
+import zlib
+import markdown
 
 # 微信配置
 APPID = 'wx11daf1af1c4ccb4d'
@@ -19,10 +21,7 @@ def get_access_token():
     return data['access_token']
 
 def upload_thumb_image(token):
-    """上传封面图（使用纯色占位图）"""
-    # 创建一个简单的 200x200 PNG 纯色图
-    import struct, zlib
-    
+    """上传封面图（莫兰迪蓝色）"""
     def create_png(w, h, r, g, b):
         def png_chunk(chunk_type, data):
             c = chunk_type + data
@@ -31,7 +30,6 @@ def upload_thumb_image(token):
         
         header = b'\x89PNG\r\n\x1a\n'
         ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
-        # 简单扫描线
         raw = b''
         for y in range(h):
             raw += b'\x00' + bytes([r, g, b] * w)
@@ -39,21 +37,113 @@ def upload_thumb_image(token):
         
         return header + png_chunk(b'IHDR', ihdr) + png_chunk(b'IDAT', idat_data) + png_chunk(b'IEND', b'')
     
-    # 莫兰迪蓝色封面
-    png_data = create_png(200, 200, 163, 177, 189)  # 莫兰迪蓝灰色
+    # 莫兰迪蓝灰色封面
+    png_data = create_png(200, 200, 163, 177, 189)
     files = {'media': ('thumb.png', png_data, 'image/png')}
-    upload_url = f'https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={token}&type=image'
+    upload_url = f'https://api.weixin.qq.com/cgi-bin/media/upload?access_token={token}&type=image'
     resp = requests.post(upload_url, files=files)
     result = resp.json()
     print(f'上传封面图: {result}')
     if 'media_id' in result:
         return result['media_id']
-    # 尝试临时素材
-    upload_url2 = f'https://api.weixin.qq.com/cgi-bin/media/upload?access_token={token}&type=image'
-    resp2 = requests.post(upload_url2, files=files)
-    result2 = resp2.json()
-    print(f'上传临时封面图: {result2}')
-    return result2.get('media_id')
+    return None
+
+def md_to_html(md_content):
+    """将 Markdown 转换为适合微信的 HTML"""
+    # 使用 markdown 库转换为 HTML
+    html = markdown.markdown(
+        md_content,
+        extensions=['tables', 'fenced_code', 'codehilite', 'toc']
+    )
+    
+    # 添加样式
+    styled_html = f'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body {{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.8;
+    color: #333;
+    padding: 20px;
+    max-width: 100%;
+    word-wrap: break-word;
+}}
+h1 {{
+    font-size: 24px;
+    color: #1a1a1a;
+    border-bottom: 2px solid #a3b1c4;
+    padding-bottom: 10px;
+    margin-top: 20px;
+}}
+h2 {{
+    font-size: 20px;
+    color: #2d3748;
+    border-left: 4px solid #a3b1c4;
+    padding-left: 12px;
+    margin-top: 24px;
+}}
+h3 {{
+    font-size: 18px;
+    color: #4a5568;
+    margin-top: 16px;
+}}
+p {{
+    margin: 12px 0;
+    text-align: justify;
+}}
+ul, ol {{
+    padding-left: 24px;
+    margin: 12px 0;
+}}
+li {{
+    margin: 6px 0;
+}}
+blockquote {{
+    border-left: 4px solid #a3b1c4;
+    background: #f7f9fb;
+    padding: 12px 16px;
+    margin: 12px 0;
+    color: #555;
+}}
+strong {{
+    color: #2d3748;
+}}
+code {{
+    background: #f1f3f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 14px;
+}}
+table {{
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+}}
+th, td {{
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+}}
+th {{
+    background: #a3b1c4;
+    color: white;
+}}
+hr {{
+    border: none;
+    border-top: 1px solid #ddd;
+    margin: 20px 0;
+}}
+</style>
+</head>
+<body>
+{html}
+</body>
+</html>'''
+    return styled_html
 
 def add_draft(token, title, content, thumb_media_id):
     url = f'https://api.weixin.qq.com/cgi-bin/draft/add?access_token={token}'
@@ -87,23 +177,28 @@ files = sorted(glob.glob('AI-Report_*.md'))
 if files:
     latest = files[-1]
     with open(latest, 'r', encoding='utf-8') as f:
-        content = f.read()
+        md_content = f.read()
 else:
     print('未找到报告文件')
     sys.exit(1)
 
-print(f'找到报告: {latest}')
+print(f'找到报告: {latest}, 长度: {len(md_content)} 字符')
 
 # 获取 access_token
 token = get_access_token()
 if not token:
     sys.exit(1)
+print(f'获取 access_token 成功')
 
 # 上传封面图
 thumb_media_id = upload_thumb_image(token)
 if not thumb_media_id:
-    print('上传封面图失败，无法创建文章')
+    print('上传封面图失败')
     sys.exit(1)
+
+# 转换 Markdown → HTML
+html_content = md_to_html(md_content)
+print(f'转换为 HTML 成功, 长度: {len(html_content)} 字符')
 
 # 创建草稿
 now = datetime.now()
@@ -111,17 +206,12 @@ is_pm = now.hour >= 12
 report_type = '晚间版' if is_pm else '早间版'
 title = f'【AI日报】{now.strftime("%m/%d")} {report_type}'
 
-result = add_draft(token, title, content, thumb_media_id)
+result = add_draft(token, title, html_content, thumb_media_id)
 print(f'创建草稿: {result}')
 
 if 'media_id' in result:
     media_id = result['media_id']
     print(f'草稿 media_id: {media_id}')
-    pub_result = publish_draft(token, media_id)
-    print(f'发布结果: {pub_result}')
-    if pub_result.get('errcode') == 0:
-        print('发布成功!')
-    else:
-        print(f'发布失败: {pub_result}')
+    print('草稿创建成功！请在公众号后台手动发布。')
 else:
     print(f'创建草稿失败: {result}')
