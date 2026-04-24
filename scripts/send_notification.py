@@ -19,9 +19,10 @@ else:
 
 summary = content[:500] + "..." if len(content) > 500 else content
 
-url = "https://sc.ftqq.com/" + sckey + ".send"
+# 修复：使用新版 Server酱 API 端点 (v2)
+url = "https://sctapi.ftqq.com/" + sckey + ".send"
 data = {
-    "text": "AI Daily Report " + report_type + " | " + now.strftime('%m/%d %H:%M'),
+    "title": "AI Daily Report " + report_type + " | " + now.strftime('%m/%d %H:%M'),
     "desp": "**GitHub**: https://github.com/dudujiaoshou/ai-daily-reports\n\n---\n" + summary
 }
 
