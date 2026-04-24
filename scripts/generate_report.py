@@ -32,9 +32,11 @@ payload = {
     'temperature': 0.7
 }
 
+# Build headers WITHOUT charset in Content-Type (semicolons in headers can cause issues)
+# Use only ASCII characters in headers
 req_headers = {
     'Authorization': 'Bearer ' + api_key,
-    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Type': 'application/json',
     'Accept': 'application/json'
 }
 
@@ -44,7 +46,7 @@ try:
     print(f'Response status: {resp.status_code}')
 
     if resp.status_code == 200:
-        # CRITICAL: Manually decode response with UTF-8 to avoid latin-1 errors
+        # Manual UTF-8 decode to avoid any encoding issues
         raw_text = resp.content.decode('utf-8')
         result = json.loads(raw_text)
         content = result['choices'][0]['message']['content']
