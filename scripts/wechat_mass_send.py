@@ -22,13 +22,12 @@ def get_access_token():
     return data['access_token']
 
 def upload_thumb_image(token):
-    """上传封面图（精心设计的莫兰迪风格封面）"""
+    """上传精美莫兰迪风格封面图"""
     def create_png(w, h, r, g, b):
         def png_chunk(chunk_type, data):
             c = chunk_type + data
             crc = zlib.crc32(c) & 0xffffffff
             return struct.pack('>I', len(data)) + c + struct.pack('>I', crc)
-        
         header = b'\x89PNG\r\n\x1a\n'
         ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
         raw = b''
@@ -39,7 +38,6 @@ def upload_thumb_image(token):
     
     # 莫兰迪蓝灰色封面
     png_data = create_png(400, 200, 163, 177, 189)
-    
     files = {'media': ('thumb.png', png_data, 'image/png')}
     upload_url = f'https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={token}&type=image'
     resp = requests.post(upload_url, files=files)
@@ -50,14 +48,15 @@ def upload_thumb_image(token):
     return None
 
 def md_to_html(md_content):
-    """将 Markdown 转换为适合微信的精美 HTML"""
-    # 转换为 HTML
+    """将 Markdown 转换为精美的微信 HTML"""
     html_body = markdown.markdown(
         md_content,
-        extensions=['tables', 'fenced_code', 'codehilite']
+        extensions=['tables', 'fenced_code', 'codehilite'],
+        extension_config={
+            'codehilite': {'css_class': 'highlight'}
+        }
     )
     
-    # 精细化的 Markdown 样式 HTML
     styled_html = f'''<!DOCTYPE html>
 <html>
 <head>
@@ -74,28 +73,60 @@ body {{
     background: #fafafa;
 }}
 
+/* 封面区域 */
+.cover-header {{
+    text-align: center;
+    padding: 20px 0 30px 0;
+    border-bottom: 2px solid #e8eef4;
+    margin-bottom: 24px;
+}}
+.cover-header .tag {{
+    display: inline-block;
+    background: linear-gradient(135deg, #a3b1c4, #8fa5bf);
+    color: white;
+    padding: 4px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+}}
+.cover-header .title {{
+    font-size: 24px;
+    font-weight: 700;
+    color: #2c3e50;
+    letter-spacing: 1px;
+    margin: 8px 0;
+}}
+.cover-header .date {{
+    color: #95a5a6;
+    font-size: 14px;
+    margin-top: 8px;
+}}
+
 /* 标题样式 */
 h1 {{
-    font-size: 20px;
-    color: #2c3e50;
-    border-left: 5px solid #a3b1c4;
-    padding: 12px 0 12px 18px;
-    margin: 20px 0 16px 0;
-    background: linear-gradient(to right, #f0f4f8, transparent);
+    font-size: 19px;
+    color: #ffffff;
+    background: linear-gradient(135deg, #a3b1c4, #7f8fa6);
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin: 28px 0 16px 0;
     letter-spacing: 1px;
 }}
 
 h2 {{
     font-size: 17px;
     color: #34495e;
-    border-bottom: 1.5px solid #d5dfe7;
+    border-bottom: 2px solid #d5dfe7;
     padding: 10px 0 8px 0;
     margin: 24px 0 12px 0;
 }}
 
 h3 {{
-    font-size: 15px;
-    color: #5d6d7e;
+    font-size: 16px;
+    color: #2c3e50;
+    border-left: 4px solid #a3b1c4;
+    padding-left: 12px;
     margin: 16px 0 8px 0;
 }}
 
@@ -108,12 +139,12 @@ p {{
 
 /* 列表 */
 ul, ol {{
-    padding-left: 18px;
+    padding-left: 20px;
     margin: 10px 0;
-    color: #555;
 }}
 li {{
     margin: 6px 0;
+    color: #555;
     line-height: 1.8;
 }}
 
@@ -125,7 +156,6 @@ blockquote {{
     margin: 14px 0;
     border-radius: 0 8px 8px 0;
     color: #666;
-    font-style: italic;
 }}
 blockquote p {{
     margin: 4px 0;
@@ -145,9 +175,7 @@ code {{
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 14px;
-    font-family: "SF Mono", "Consolas", monospace;
 }}
-
 pre {{
     background: #2d3436;
     color: #dfe6e9;
@@ -172,7 +200,7 @@ table {{
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }}
 th {{
-    background: #a3b1c4;
+    background: linear-gradient(135deg, #a3b1c4, #8fa5bf);
     color: white;
     padding: 10px 14px;
     text-align: left;
@@ -193,14 +221,13 @@ tr:hover {{
 hr {{
     border: none;
     border-top: 1.5px dashed #d5dfe7;
-    margin: 20px 0;
+    margin: 24px 0;
 }}
 
 /* 链接 */
 a {{
     color: #7f8c8d;
     text-decoration: none;
-    border-bottom: 1px dotted #a3b1c4;
 }}
 </style>
 </head>
