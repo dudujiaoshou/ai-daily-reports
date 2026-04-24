@@ -7,8 +7,9 @@ on:
   workflow_dispatch:
 
 env:
-  SERVERCHAN_SCKEY: ${{ secrets.SERVERCHAN_SCKEY }}
   NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+  WX_APPID: ${{ secrets.WX_APPID }}
+  WX_APPSECRET: ${{ secrets.WX_APPSECRET }}
 
 jobs:
   generate-report:
@@ -24,7 +25,8 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests
+        run: |
+          pip install requests markdown wechatpy Pillow
 
       - name: Generate AI Report
         env:
@@ -33,11 +35,12 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: python3 scripts/generate_report.py
 
-      - name: Send WeChat notification via ServerChan
-        if: env.SERVERCHAN_SCKEY != ''
+      - name: Send to WeChat Official Account
+        if: env.WX_APPID != '' && env.WX_APPSECRET != ''
         env:
-          SERVERCHAN_SCKEY: ${{ env.SERVERCHAN_SCKEY }}
-        run: python3 scripts/send_notification.py
+          WX_APPID: ${{ env.WX_APPID }}
+          WX_APPSECRET: ${{ env.WX_APPSECRET }}
+        run: python3 scripts/wechat_mass_send.py
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
