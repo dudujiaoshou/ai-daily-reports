@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests markdown wechatpy Pillow cryptography
+        run: pip install requests qrcode[pil] markdown wechatpy Pillow cryptography
 
       - name: Generate AI Report
         env:
