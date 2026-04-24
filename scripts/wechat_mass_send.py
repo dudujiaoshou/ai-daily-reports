@@ -209,7 +209,7 @@ def md_to_wechat_html_v2(md_content, report_date, weekday):
     html_body = re.sub(r'<p[^>]*>(.*?)</p>', style_p, html_body, flags=re.DOTALL)
 
     # ---- HR ----
-    html_body = re.sub(r'<hr\s*/?>', '<div style="height:1px;background:linear-gradient(to right,transparent,#E5E0D8,transparent);margin:24px 0;"></div>')
+    html_body = re.sub(r'<hr\s*/?>', '<div style="height:1px;background:linear-gradient(to right,transparent,#E5E0D8,transparent);margin:24px 0;"></div>', html_body)
 
     # ---- TABLE ----
     def style_table(m):
