@@ -30,6 +30,7 @@ jobs:
         env:
           NVIDIA_API_KEY: ${{ env.NVIDIA_API_KEY }}
           GITHUB_OUTPUT: ${{ env.GITHUB_OUTPUT }}
+          PYTHONIOENCODING: utf-8
         run: python3 scripts/generate_report.py
 
       - name: Send WeChat notification via ServerChan
