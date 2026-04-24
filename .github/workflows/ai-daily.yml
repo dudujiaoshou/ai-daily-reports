@@ -8,8 +8,6 @@ on:
 
 env:
   NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-  WX_APPID: ${{ secrets.WX_APPID }}
-  WX_APPSECRET: ${{ secrets.WX_APPSECRET }}
 
 jobs:
   generate-report:
@@ -25,8 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install requests markdown wechatpy Pillow cryptography
+        run: pip install requests markdown wechatpy Pillow cryptography
 
       - name: Generate AI Report
         env:
@@ -36,10 +33,9 @@ jobs:
         run: python3 scripts/generate_report.py
 
       - name: Send to WeChat Official Account
-        if: env.WX_APPID != '' && env.WX_APPSECRET != ''
         env:
-          WX_APPID: ${{ env.WX_APPID }}
-          WX_APPSECRET: ${{ env.WX_APPSECRET }}
+          WX_APPID: ${{ secrets.WX_APPID }}
+          WX_APPSECRET: ${{ secrets.WX_APPSECRET }}
         run: python3 scripts/wechat_mass_send.py
 
       - name: Upload report artifact
