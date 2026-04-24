@@ -7,33 +7,40 @@ api_key = os.environ.get('NVIDIA_API_KEY')
 github_output = os.environ.get('GITHUB_OUTPUT', '')
 
 if not api_key:
-    filename = f"AI-Report_{datetime.now().strftime('%Y-%m-%d')}_ERROR.md"
+    filename = 'AI-Report_ERROR.md'
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write('# Error: NVIDIA_API_KEY not configured\n')
+        f.write('Error: NVIDIA_API_KEY not configured')
     if github_output:
         with open(github_output, 'a', encoding='utf-8') as f:
-            f.write(f'filename={filename}\n')
+            f.write('filename=' + filename + '\n')
     exit(1)
 
 url = 'https://integrate.api.nvidia.com/v1/chat/completions'
 
 now = datetime.now()
 is_pm = now.hour >= 12
-date_str = now.strftime('%Y年%m月%d日')
-report_type = '下午' if is_pm else '上午'
+date_str = now.strftime('%Y-%m-%d')
+report_type = 'PM' if is_pm else 'AM'
 suffix = '_PM' if is_pm else '_AM'
-filename = f"AI-Report_{now.strftime('%Y-%m-%d')}{suffix}.md"
+filename = 'AI-Report_' + date_str + suffix + '.md'
 
 system_prompt = (
-    "You are a professional AI industry analyst. Generate a daily AI industry report in Simplified Chinese. "
-    "Date: " + date_str + ". "
-    "Structure: 1) Global AI/Tech/Investment news (5-8 items with analysis), "
-    "2) Chinese AI startup data (3-5 companies with funding, investors, sector), "
-    "3) Shanghai AI events (3-5 upcoming events with date, venue, organizer, registration). "
-    "Format: Markdown. Length: 800-1500 Chinese characters. Be specific with data and provide your own insights."
+    'You are a professional AI industry analyst. Generate a comprehensive daily AI industry report. '
+    'Date: ' + date_str + '. '
+    'Structure: Section 1) Global AI/Tech/Investment news (5-8 items with brief analysis), '
+    'Section 2) Chinese AI startup data (3-5 companies with funding amount, investors, sector, analysis), '
+    'Section 3) Shanghai AI events (3-5 upcoming events with date, venue, organizer, registration link if available). '
+    'Format: Markdown with proper headings. Length: 800-1500 Chinese characters. '
+    'Be specific with data, names, and figures. Provide your own insights and highlight opportunities and risks.'
 )
 
-user_prompt = f"Generate a professional AI industry report for {date_str}, covering global AI news, Chinese AI startup dynamics, and Shanghai AI events. Output in Simplified Chinese."
+user_prompt = (
+    'Generate a professional AI industry daily report for ' + date_str + '. '
+    'Cover: (1) Global AI/Tech/Investment news from the past 24 hours, '
+    '(2) Chinese AI startup funding and developments, '
+    '(3) Shanghai AI-related events and meetups. '
+    'Output in Simplified Chinese (Simplified Chinese, not Traditional). Use Markdown format.'
+)
 
 payload = {
     'model': 'meta/llama-3.3-70b-instruct',
@@ -60,21 +67,21 @@ try:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
 
-        print('Report generated: ' + filename)
+        print('SUCCESS: Report generated - ' + filename)
 
         if github_output:
             with open(github_output, 'a', encoding='utf-8') as f:
-                f.write(f'filename={filename}\n')
+                f.write('filename=' + filename + '\n')
     else:
-        print('API Error: ' + str(response.status_code))
-        print('Response: ' + response.text)
+        err_msg = 'API Error ' + str(response.status_code) + ': ' + response.text[:500]
+        print(err_msg)
 
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(f'# AI Daily Report - Error\n\n**Date**: {date_str} {report_type}\n\n## Error\n\n**Status**: {response.status_code}\n\n**Details**:\n{response.text}\n')
+            f.write('AI Daily Report - Error\n\nStatus: ' + str(response.status_code) + '\n\n' + response.text)
 
         if github_output:
             with open(github_output, 'a', encoding='utf-8') as f:
-                f.write(f'filename={filename}\n')
+                f.write('filename=' + filename + '\n')
 
 except Exception as e:
     print('Error: ' + str(e))
@@ -82,8 +89,8 @@ except Exception as e:
     traceback.print_exc()
 
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write(f'# AI Daily Report - Error\n\n**Date**: {date_str} {report_type}\n\n## Error\n\n{str(e)}\n')
+        f.write('AI Daily Report - Error\n\n' + str(e) + '\n')
 
     if github_output:
         with open(github_output, 'a', encoding='utf-8') as f:
-            f.write(f'filename={filename}\n')
+            f.write('filename=' + filename + '\n')
