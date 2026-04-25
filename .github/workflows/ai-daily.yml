@@ -2,8 +2,8 @@ name: AI Daily Report
 
 on:
   schedule:
-    # 每天北京时间 10:00 (UTC 02:00)
-    - cron: '0 2 * * *'
+    # 每天北京时间 7:30 (UTC 23:30)
+    - cron: '30 23 * * *'
   workflow_dispatch:
 
 env:
