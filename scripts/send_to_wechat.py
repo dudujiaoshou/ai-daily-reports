@@ -1,4 +1,4 @@
-import os, sys, requests, json, base64, re
+import os, sys, requests, json, base64, re, random, math
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 
