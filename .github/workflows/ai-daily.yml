@@ -2,8 +2,8 @@ name: AI Daily Report
 
 on:
   schedule:
+    # 每天北京时间 10:00 (UTC 02:00)
     - cron: '0 2 * * *'
-    - cron: '0 10 * * *'
   workflow_dispatch:
 
 env:
@@ -26,6 +26,7 @@ jobs:
         run: pip install requests qrcode[pil] markdown wechatpy Pillow cryptography
 
       - name: Generate AI Report
+        id: generate
         env:
           NVIDIA_API_KEY: ${{ env.NVIDIA_API_KEY }}
           GITHUB_OUTPUT: ${{ env.GITHUB_OUTPUT }}
@@ -33,17 +34,27 @@ jobs:
         run: python3 scripts/generate_report.py
 
       - name: Generate HTML Preview
+        if: success()
         env:
           PYTHONIOENCODING: utf-8
         run: python3 scripts/generate_preview.py
 
       - name: Send to WeChat Official Account
+        id: wechat
+        if: success()
         env:
           WX_APPID: ${{ secrets.WX_APPID }}
           WX_APPSECRET: ${{ secrets.WX_APPSECRET }}
-        run: python3 scripts/send_to_wechat.py
+        run: |
+          for i in 1 2 3; do
+            echo "Attempt $i..."
+            python3 scripts/send_to_wechat.py && break
+            echo "Attempt $i failed, retrying in 30s..."
+            sleep 30
+          done
 
       - name: Upload report artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ai-daily-report-${{ github.run_number }}
@@ -51,3 +62,9 @@ jobs:
             AI-Report_*.md
             preview_draft.html
           retention-days: 30
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "::error::每日AI日报生成失败！请检查日志。"
+          echo "运行ID: ${{ github.run_id }}"
