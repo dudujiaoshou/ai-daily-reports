@@ -85,162 +85,201 @@ def interpolate_color(color1, color2, ratio):
         int(b1 + (b2 - b1) * ratio)
     )
 
-def create_dynamic_cover(theme_key, date_str):
-    """创建动态主题封面 - 增强视觉设计"""
-    theme = COVER_THEMES.get(theme_key, COVER_THEMES['default'])
-    colors = theme['colors']
+def create_creative_cover(theme_key, date_str):
+    """创建创意封面 - 10种风格轮换"""
+    # 导入创意风格
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("cover_designs", "cover_designs.py")
+    cover_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cover_module)
+    
+    # 获取今天的风格
+    style_key, style = cover_module.get_daily_style()
+    
+    # 也可以根据内容主题调整
+    content_style = cover_module.get_theme_style(theme_key)
+    if content_style != style_key:
+        # 内容主题和日期主题不同，混合使用
+        style_key = content_style
+        style = cover_module.COVER_STYLES[style_key]
+    
+    colors = style['colors']
+    accent = style['accent']
     
     w, h = 900, 500
     img = Image.new('RGB', (w, h), colors[0])
     draw = ImageDraw.Draw(img)
     
-    # 创建更丰富的渐变背景
+    # 创建渐变背景
     for y in range(h):
         ratio = y / h
-        if ratio < 0.3:
-            r, g, b = interpolate_color(colors[0], colors[1], ratio / 0.3)
-        elif ratio < 0.7:
-            r, g, b = interpolate_color(colors[1], colors[2], (ratio - 0.3) / 0.4)
+        if ratio < 0.5:
+            r, g, b = interpolate_color(colors[0], colors[1], ratio * 2)
         else:
-            r, g, b = interpolate_color(colors[2], colors[0], (ratio - 0.7) / 0.3)
+            r, g, b = interpolate_color(colors[1], colors[2], (ratio - 0.5) * 2)
         draw.line([(0, y), (w, y)], fill=(r, g, b))
     
-    # 添加几何图案装饰 - 更有设计感
-    # 大圆形装饰
-    draw.ellipse([-100, -100, 300, 300], fill=(255, 255, 255, 8))
-    draw.ellipse([600, 200, 1000, 600], fill=(255, 255, 255, 5))
+    # 根据风格类型绘制装饰
+    bg_type = style['bg_type']
     
-    # 网格线装饰
-    for i in range(0, w, 60):
-        draw.line([(i, 0), (i, h)], fill=(255, 255, 255, 3), width=1)
-    for i in range(0, h, 60):
-        draw.line([(0, i), (w, i)], fill=(255, 255, 255, 3), width=1)
+    if bg_type == 'neural':
+        # 神经网络 - 节点和连线
+        nodes = []
+        for _ in range(8):
+            x = random.randint(100, 800)
+            y = random.randint(50, 450)
+            nodes.append((x, y))
+            draw.ellipse([x-8, y-8, x+8, y+8], fill=accent)
+        for i, n1 in enumerate(nodes):
+            for n2 in nodes[i+1:]:
+                if abs(n1[0]-n2[0]) + abs(n1[1]-n2[1]) < 300:
+                    draw.line([n1, n2], fill=(255,255,255,30), width=1)
     
-    # 主题特定装饰元素
-    if theme_key == 'funding':
-        # 金币/投资主题 - 添加圆形和线条
+    elif bg_type == 'mesh':
+        # 渐变网格 - 波浪线
         for i in range(5):
-            x = 700 + i * 30
-            y = 80 + i * 20
-            draw.ellipse([x, y, x+40, y+40], fill=(255, 215, 0, 40), outline=(255, 255, 255, 60))
-        # 上升箭头
-        draw.polygon([(100, 400), (130, 350), (160, 400)], fill=(255, 255, 255, 20))
-        draw.line([(130, 350), (130, 450)], fill=(255, 255, 255, 30), width=3)
-        
-    elif theme_key == 'robot':
-        # 机械/机器人主题 - 齿轮状装饰
-        for i in range(6):
-            angle = i * 60
-            import math
-            cx, cy = 800, 150
-            x1 = cx + 60 * math.cos(math.radians(angle))
-            y1 = cy + 60 * math.sin(math.radians(angle))
-            x2 = cx + 80 * math.cos(math.radians(angle))
-            y2 = cy + 80 * math.sin(math.radians(angle))
-            draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255, 40), width=8)
-        draw.ellipse([cx-50, cy-50, cx+50, cy+50], fill=(255, 255, 255, 15), outline=(255, 255, 255, 30))
-        
-    elif theme_key == 'model':
-        # AI模型主题 - 神经网络节点
-        nodes = [(750, 100), (820, 150), (780, 220), (720, 180), (850, 200)]
-        for node in nodes:
-            draw.ellipse([node[0]-15, node[1]-15, node[0]+15, node[1]+15], 
-                        fill=(255, 255, 255, 30), outline=(255, 255, 255, 50))
-        # 连接线
-        for i in range(len(nodes)):
-            for j in range(i+1, len(nodes)):
-                draw.line([nodes[i], nodes[j]], fill=(255, 255, 255, 15), width=2)
-                
-    elif theme_key == 'coding':
-        # 代码主题 - 代码块装饰
-        for i in range(4):
-            y = 100 + i * 40
-            draw.rectangle([50, y, 200, y+20], fill=(255, 255, 255, 10))
-            draw.rectangle([50, y, 100 + i*30, y+20], fill=(255, 255, 255, 20))
-        # 光标
-        draw.rectangle([220, 100, 225, 180], fill=(255, 255, 255, 40))
-        
-    elif theme_key == 'policy':
-        # 政策主题 - 建筑/文件装饰
-        draw.rectangle([700, 100, 750, 250], fill=(255, 255, 255, 10), outline=(255, 255, 255, 20))
-        draw.rectangle([760, 150, 810, 250], fill=(255, 255, 255, 15), outline=(255, 255, 255, 25))
-        draw.rectangle([820, 80, 870, 250], fill=(255, 255, 255, 8), outline=(255, 255, 255, 15))
-        # 顶部三角形
-        draw.polygon([(725, 80), (700, 100), (750, 100)], fill=(255, 255, 255, 20))
-        draw.polygon([(785, 130), (760, 150), (810, 150)], fill=(255, 255, 255, 25))
-        draw.polygon([(845, 60), (820, 80), (870, 80)], fill=(255, 255, 255, 15))
-    else:
-        # 默认主题 - 抽象圆形和线条
-        draw.ellipse([650, 50, 850, 250], fill=(255, 255, 255, 8))
-        draw.ellipse([50, 300, 250, 500], fill=(255, 255, 255, 5))
-        # 装饰线
-        draw.arc([100, 100, 300, 300], 0, 90, fill=(255, 255, 255, 20), width=2)
-        draw.arc([600, 200, 800, 400], 180, 270, fill=(255, 255, 255, 15), width=2)
+            y_base = 100 + i * 80
+            points = []
+            for x in range(0, w, 20):
+                y = y_base + 30 * ((x % 100) / 100)
+                points.append((x, int(y)))
+            if len(points) > 1:
+                for j in range(len(points)-1):
+                    draw.line([points[j], points[j+1]], fill=(255,255,255,40), width=2)
     
-    # 文字 - 尝试加载中文字体
+    elif bg_type == 'particles':
+        # 粒子星空
+        for _ in range(50):
+            x = random.randint(0, w)
+            y = random.randint(0, h)
+            size = random.randint(1, 4)
+            brightness = random.randint(100, 255)
+            draw.ellipse([x, y, x+size, y+size], fill=(brightness, brightness, brightness))
+    
+    elif bg_type == 'glass':
+        # 玻璃拟态 - 半透明卡片
+        for _ in range(3):
+            x = random.randint(50, 700)
+            y = random.randint(50, 350)
+            ww = random.randint(100, 200)
+            hh = random.randint(80, 150)
+            draw.rounded_rectangle([x, y, x+ww, y+hh], radius=15, 
+                                  fill=(255,255,255,20), outline=(255,255,255,40))
+    
+    elif bg_type == 'circuit':
+        # 电路板 - 线条和节点
+        for _ in range(10):
+            x1 = random.randint(0, w)
+            y1 = random.randint(0, h)
+            if random.random() > 0.5:
+                x2 = x1 + random.randint(50, 150)
+                y2 = y1
+            else:
+                x2 = x1
+                y2 = y1 + random.randint(50, 150)
+            draw.line([(x1, y1), (x2, y2)], fill=accent, width=2)
+            draw.ellipse([x2-4, y2-4, x2+4, y2+4], fill=accent)
+    
+    elif bg_type == 'aurora':
+        # 极光 - 飘逸的色带
+        for i in range(3):
+            y_base = 150 + i * 100
+            for x in range(0, w, 10):
+                y = y_base + 50 * ((x % 200) / 200)
+                draw.ellipse([x, int(y), x+30, int(y)+10], fill=(255,255,255,15))
+    
+    elif bg_type == 'matrix':
+        # 矩阵代码雨
+        for _ in range(20):
+            x = random.randint(0, w)
+            y = random.randint(0, h)
+            for j in range(random.randint(3, 8)):
+                draw.text((x, y + j*15), random.choice(['0','1']), fill=(0, 255, 65, 100))
+    
+    elif bg_type == 'hologram':
+        # 全息 - 网格地面
+        for i in range(0, h, 40):
+            draw.line([(0, i), (w, i)], fill=(255,255,255,10), width=1)
+        for i in range(0, w, 40):
+            draw.line([(i, 0), (i, h)], fill=(255,255,255,10), width=1)
+        # 中心发光
+        draw.ellipse([w//2-100, h//2-100, w//2+100, h//2+100], fill=(255,255,255,10))
+    
+    elif bg_type == 'dataviz':
+        # 数据可视化 - 柱状图
+        for i in range(8):
+            x = 100 + i * 90
+            bar_h = random.randint(50, 200)
+            draw.rectangle([x, h-100-bar_h, x+60, h-100], fill=(255,255,255,30))
+    
+    elif bg_type == 'isometric':
+        # 等距方块
+        for _ in range(5):
+            x = random.randint(100, 700)
+            y = random.randint(100, 300)
+            size = random.randint(40, 80)
+            # 顶面
+            draw.polygon([(x, y), (x+size, y-size//2), (x+size*2, y)], fill=(255,255,255,25))
+            # 右面
+            draw.polygon([(x+size*2, y), (x+size*2, y+size), (x+size, y+size//2)], fill=(255,255,255,15))
+            # 左面
+            draw.polygon([(x, y), (x+size, y+size//2), (x+size, y+size), (x, y+size//2)], fill=(255,255,255,20))
+    
+    # 文字
     font_paths = [
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         "C:/Windows/Fonts/simhei.ttf",
-        "C:/Windows/Fonts/simsun.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ]
     
-    fn_bold = fn_reg = fn_small = fn_title = None
+    fn_title = fn_reg = fn_small = None
     for fp in font_paths:
         if os.path.exists(fp):
             try:
-                fn_title = ImageFont.truetype(fp, 80)
-                fn_bold = ImageFont.truetype(fp, 60)
-                fn_reg = ImageFont.truetype(fp, 36)
-                fn_small = ImageFont.truetype(fp, 26)
+                fn_title = ImageFont.truetype(fp, 72)
+                fn_reg = ImageFont.truetype(fp, 32)
+                fn_small = ImageFont.truetype(fp, 24)
                 break
             except:
                 continue
     
-    if not fn_bold:
-        fn_bold = fn_reg = fn_small = fn_title = ImageFont.load_default()
+    if not fn_title:
+        fn_title = fn_reg = fn_small = ImageFont.load_default()
     
-    # 顶部标签
+    # 顶部品牌
     label = "AI INSIDER"
     bbox = draw.textbbox((0, 0), label, font=fn_small)
     lw = bbox[2] - bbox[0]
-    draw.text(((w - lw) // 2, 50), label, fill=(255, 255, 255, 180), font=fn_small)
+    draw.text(((w - lw) // 2, 40), label, fill=(255, 255, 255, 200), font=fn_small)
     
-    # 分隔线
-    draw.line([(350, 90), (550, 90)], fill=(255, 255, 255, 100), width=2)
-    
-    # 主题大标题
+    # 主标题
     title = "我的AI小管家"
     bbox = draw.textbbox((0, 0), title, font=fn_title)
     tw = bbox[2] - bbox[0]
-    draw.text(((w - tw) // 2, 120), title, fill='white', font=fn_title)
+    draw.text(((w - tw) // 2, 130), title, fill='white', font=fn_title)
     
-    # 主题描述
-    bbox = draw.textbbox((0, 0), theme['desc'], font=fn_reg)
+    # 风格描述
+    bbox = draw.textbbox((0, 0), style['desc'], font=fn_reg)
     dw = bbox[2] - bbox[0]
-    draw.text(((w - dw) // 2, 230), theme['desc'], fill='#F0F4F8', font=fn_reg)
-    
-    # 分隔线
-    draw.line([(400, 290), (500, 290)], fill=(255, 255, 255, 80), width=2)
+    draw.text(((w - dw) // 2, 230), style['desc'], fill='#F0F4F8', font=fn_reg)
     
     # 日期
     bbox = draw.textbbox((0, 0), date_str, font=fn_small)
     dtw = bbox[2] - bbox[0]
-    draw.text(((w - dtw) // 2, 320), date_str, fill='#E8EDF2', font=fn_small)
+    draw.text(((w - dtw) // 2, 300), date_str, fill='#E8EDF2', font=fn_small)
     
-    # 底部主题标签
-    bbox = draw.textbbox((0, 0), theme['name'], font=fn_small)
+    # 风格标签
+    bbox = draw.textbbox((0, 0), style['name'], font=fn_small)
     nw = bbox[2] - bbox[0]
-    # 标签背景
-    padding = 15
+    padding = 12
     draw.rounded_rectangle(
-        [((w - nw) // 2 - padding, 380), ((w + nw) // 2 + padding, 420)],
-        radius=20,
-        fill=(255, 255, 255, 30),
-        outline=(255, 255, 255, 50)
+        [((w - nw) // 2 - padding, 360), ((w + nw) // 2 + padding, 395)],
+        radius=15,
+        fill=(255, 255, 255, 25),
+        outline=(255, 255, 255, 40)
     )
-    draw.text(((w - nw) // 2, 388), theme['name'], fill='white', font=fn_small)
+    draw.text(((w - nw) // 2, 368), style['name'], fill='white', font=fn_small)
     
     img.save('cover_dynamic.jpg', quality=95)
     return 'cover_dynamic.jpg'
@@ -328,10 +367,10 @@ def main():
     theme = COVER_THEMES.get(theme_key, COVER_THEMES['default'])
     print(f"🎨 检测到主题: {theme['name']} ({theme_key})")
     
-    # 生成动态封面
+    # 生成创意封面
     date_str = datetime.now().strftime("%Y.%m.%d")
-    print(f"🖼️ 生成动态封面: {theme['name']}...")
-    cover_path = create_dynamic_cover(theme_key, date_str)
+    print(f"🖼️ 生成创意封面...")
+    cover_path = create_creative_cover(theme_key, date_str)
     
     print("📤 上传封面图...")
     thumb_media_id = upload_image(access_token, cover_path)
