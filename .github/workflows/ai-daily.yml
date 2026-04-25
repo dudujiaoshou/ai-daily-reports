@@ -32,15 +32,22 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: python3 scripts/generate_report.py
 
+      - name: Generate HTML Preview
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python3 scripts/generate_preview.py
+
       - name: Send to WeChat Official Account
         env:
           WX_APPID: ${{ secrets.WX_APPID }}
           WX_APPSECRET: ${{ secrets.WX_APPSECRET }}
-        run: python3 scripts/wechat_mass_send.py
+        run: python3 scripts/send_to_wechat.py
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
         with:
           name: ai-daily-report-${{ github.run_number }}
-          path: 'AI-Report_*.md'
+          path: |
+            AI-Report_*.md
+            preview_draft.html
           retention-days: 30
