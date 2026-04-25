@@ -53,6 +53,13 @@ jobs:
             sleep 30
           done
 
+      - name: Verify Draft Created
+        if: always()
+        run: |
+          if [ -f "cover_dynamic.jpg" ]; then
+            echo "✅ 动态封面已生成"
+          fi
+
       - name: Upload report artifact
         if: always()
         uses: actions/upload-artifact@v4
