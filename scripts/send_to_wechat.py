@@ -89,7 +89,11 @@ def create_creative_cover(theme_key, date_str):
     """创建创意封面 - 10种风格轮换"""
     # 导入创意风格
     import importlib.util
-    spec = importlib.util.spec_from_file_location("cover_designs", "cover_designs.py")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    cover_path = os.path.join(script_dir, "cover_designs.py")
+    if not os.path.exists(cover_path):
+        cover_path = "cover_designs.py"
+    spec = importlib.util.spec_from_file_location("cover_designs", cover_path)
     cover_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cover_module)
     
