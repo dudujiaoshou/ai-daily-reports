@@ -2,7 +2,7 @@ name: AI Daily Report
 
 on:
   schedule:
-    # 每天北京时间 7:30 (UTC 23:30)
+    # Every day at 07:30 Beijing time (UTC 23:30)
     - cron: '30 23 * * *'
   workflow_dispatch:
 
@@ -21,6 +21,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Install Chinese fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk fonts-wqy-microhei
+          fc-cache -fv
 
       - name: Install dependencies
         run: pip install requests qrcode[pil] markdown wechatpy Pillow cryptography
@@ -57,7 +63,7 @@ jobs:
         if: always()
         run: |
           if [ -f "cover_dynamic.jpg" ]; then
-            echo "✅ 动态封面已生成"
+            echo "Cover image generated successfully"
           fi
 
       - name: Upload report artifact
@@ -73,5 +79,5 @@ jobs:
       - name: Notify on Failure
         if: failure()
         run: |
-          echo "::error::每日AI日报生成失败！请检查日志。"
-          echo "运行ID: ${{ github.run_id }}"
+          echo "::error::AI daily report generation failed!"
+          echo "Run ID: ${{ github.run_id }}"
